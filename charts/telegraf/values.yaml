@@ -6,10 +6,6 @@ image:
 env:
   wsUrl: "srsran-gnb-metrics:8001"
 
-replicaCount: 1
-
 labels:
   nf: gnb # important for Prometheus scraping configuration in Monarch 
 
-service:
-  metricsPort: 9090
