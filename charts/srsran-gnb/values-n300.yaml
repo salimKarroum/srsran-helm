@@ -36,13 +36,13 @@ gnbConfig:
             - plmn: "00101"
               tai_slice_support_list:
                 - sst: 1
-                  sd: 000001
+                  sd: "000001"
                 - sst: 1
-                  sd: 000002
+                  sd: "000002"
 
   ru_sdr:
     device_driver: uhd                # The RF driver name.
-    device_args: addr=192.168.235.104 # USRP N300 IP address.
+    device_args: addr=192.168.235.104,mgmt_addr=192.168.235.103 # USRP N300 IP address.
     srate: 30.72                      # RF sample rate might need to be adjusted according to selected bandwidth.
     clock: internal
     sync: internal                        
@@ -72,10 +72,10 @@ gnbConfig:
     slicing:
       -
         sst: 1
-        sd: 000001
+        sd: "000001"
       -
         sst: 1
-        sd: 000002
+        sd: "000002"
 
   log:
     filename: /tmp/gnb.log

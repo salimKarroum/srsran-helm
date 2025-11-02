@@ -36,35 +36,26 @@ gnbConfig:
             - plmn: "00101"
               tai_slice_support_list:
                 - sst: 1
-                  sd: 000001
+                  sd: "000001"
                 - sst: 1
-                  sd: 000002
+                  sd: "000002"
 
   ru_sdr:
     device_driver: uhd                # The RF driver name.
-    device_args: addr=192.168.235.105 # USRP N320 IP address.
+    device_args: addr=192.168.235.105,master_clock_rate=245.76e6 # USRP N200 IP address.
     srate: 30.72                      # RF sample rate might need to be adjusted according to selected bandwidth.
     clock: internal
     sync: internal                        
     tx_gain: 35                       # Transmit gain of the RF might need to adjusted to the given situation.
-    rx_gain: 65                       # Receive gain of the RF might need to adjusted to the given situation.
+    rx_gain: 40                       # Receive gain of the RF might need to adjusted to the given situation.
 
   cell_cfg:
-    dl_arfcn: 368500                  # ARFCN of the downlink carrier (center frequency).
-    band: 3                           # The NR band.
+    dl_arfcn: 628140                  # ARFCN of the downlink carrier (center frequency).
+    band: 78                           # The NR band.
     channel_bandwidth_MHz: 20         # Bandwith in MHz. Number of PRBs will be automatically derived.
     common_scs: 15                    # Subcarrier spacing in kHz used for data.
     plmn: "00101"                     # PLMN broadcasted by the gNB.
     tac: 1                            # Tracking area code (needs to match the core configuration).
-    pdcch:
-      common:
-        ss0_index: 0                  # Set search space zero index to match srsUE capabilities
-        coreset0_index: 12            # Set search CORESET Zero index to match srsUE capabilities
-      dedicated:
-        ss2_type: common              # Search Space type, has to be set to common
-        dci_format_0_1_and_1_1: false # Set correct DCI format (fallback)
-    prach:
-      prach_config_index: 1           # Sets PRACH config to match what is expected by srsUE
     pdsch:
       mcs_table: qam64                # Sets PDSCH MCS to 64 QAM
     pusch:
@@ -72,10 +63,10 @@ gnbConfig:
     slicing:
       -
         sst: 1
-        sd: 000001
+        sd: "000001"
       -
         sst: 1
-        sd: 000002
+        sd: "000002"
 
   log:
     filename: /tmp/gnb.log

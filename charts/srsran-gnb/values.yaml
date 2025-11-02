@@ -36,9 +36,9 @@ gnbConfig:
             - plmn: "00101"
               tai_slice_support_list:
                 - sst: 1
-                  sd: 000001
+                  sd: "000001"
                 - sst: 1
-                  sd: 000002
+                  sd: "000002"
 
   ru_sdr:
     device_driver: zmq                # The RF driver name.
@@ -70,10 +70,10 @@ gnbConfig:
     slicing:
       -
         sst: 1
-        sd: 000001
+        sd: "000001"
       -
         sst: 1
-        sd: 000002
+        sd: "000002"
 
   log:
     filename: /tmp/gnb.log
