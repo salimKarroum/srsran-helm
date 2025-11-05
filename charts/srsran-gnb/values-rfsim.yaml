@@ -88,7 +88,6 @@ gnbConfig:
       enable_app_usage: true
       enable_e1ap: true
       enable_pdcp: true
-      enable_cu_up_executor: true
       enable_sched: true
       enable_rlc: true            
       enable_mac: true            
@@ -105,4 +104,5 @@ gnbConfig:
   remote_control:
     bind_addr: 0.0.0.0
     enabled: true
+
     port: 8001
