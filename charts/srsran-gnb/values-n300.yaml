@@ -42,7 +42,7 @@ gnbConfig:
 
   ru_sdr:
     device_driver: uhd                # The RF driver name.
-    device_args: addr=192.168.235.104 # USRP N300 IP address.
+    device_args: addr=192.168.235.103 # USRP N300 IP address.
     srate: 30.72                      # RF sample rate might need to be adjusted according to selected bandwidth.
     clock: internal
     sync: internal                        
@@ -108,3 +108,4 @@ gnbConfig:
     enabled: true
 
     port: 8001
+
