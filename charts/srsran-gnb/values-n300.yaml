@@ -27,6 +27,13 @@ gnbConfig:
     inactivity_timer: 7200
     request_pdu_session_timeout: 30
     amf:
+      sctp_rto_initial: 200
+      sctp_rto_min: 200
+      sctp_rto_max: 2000
+      sctp_init_max_attempts: 5
+      sctp_hb_interval: 1000
+      sctp_assoc_max_retx: 5
+      sctp_nodelay: true
       addr: 10.10.3.200
       port: 38412
       bind_addr: 10.10.3.231
@@ -106,5 +113,6 @@ gnbConfig:
     enabled: true
 
     port: 8001
+
 
 
