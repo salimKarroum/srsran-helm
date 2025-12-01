@@ -70,11 +70,9 @@ gnbConfig:
     pusch:
       mcs_table: qam64                # Sets PUSCH MCS to 64 QAM
     slicing:
-      -
-        sst: 1
+      - sst: 1
         sd: "000001"
-      -
-        sst: 1
+      - sst: 1
         sd: "000002"
 
   log:
@@ -108,4 +106,5 @@ gnbConfig:
     enabled: true
 
     port: 8001
+
 
