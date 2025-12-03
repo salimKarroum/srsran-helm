@@ -58,8 +58,8 @@ gnbConfig:
     srate: 61.44                      # RF sample rate might need to be adjusted according to selected bandwidth.
     clock: internal
     sync: internal                        
-    tx_gain: 25                       # Transmit gain of the RF might need to adjusted to the given situation.
-    rx_gain: 35                       # Receive gain of the RF might need to adjusted to the given situation.
+    tx_gain: 35                       # Transmit gain of the RF might need to adjusted to the given situation.
+    rx_gain: 60                       # Receive gain of the RF might need to adjusted to the given situation.
 
   cell_cfg:
     dl_arfcn: 640000                  # ARFCN of the downlink carrier (center frequency).
