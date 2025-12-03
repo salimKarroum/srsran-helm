@@ -1,6 +1,12 @@
 # =========================
-# gNB values file for UHD setup with USRP N300.
+# gNB values file for UHD setup with USRP N300 -- n78 band -- NOT TESTED YET
 # =========================
+# recommended RF gain values for N300 on FR1
+# Avoid setting TX gain above ~30 dB on N3xx at FR1 frequencies to prevent excessive distortion.
+# tx_gain: 20–30
+# rx_gain: 25–40
+# other possible ARFCN: 627000 (3400 MHz), 636666 (3500 MHz), 648000 (3700 MHz)
+#
 
 image:
   repository: ghcr.io/ziyad-mabrouk/srsran-gnb-uhd
@@ -49,19 +55,20 @@ gnbConfig:
   ru_sdr:
     device_driver: uhd                # The RF driver name.
     device_args: addr=192.168.235.103 # USRP N300 IP address.
-    srate: 30.72                      # RF sample rate might need to be adjusted according to selected bandwidth.
+    srate: 61.44                      # RF sample rate might need to be adjusted according to selected bandwidth.
     clock: internal
     sync: internal                        
-    tx_gain: 25 # was 35              # Transmit gain of the RF might need to adjusted to the given situation.
-    rx_gain: 35 # was 65              # Receive gain of the RF might need to adjusted to the given situation.
+    tx_gain: 25                       # Transmit gain of the RF might need to adjusted to the given situation.
+    rx_gain: 35                       # Receive gain of the RF might need to adjusted to the given situation.
 
   cell_cfg:
-    dl_arfcn: 368500                  # ARFCN of the downlink carrier (center frequency).
-    band: 3                           # The NR band.
+    dl_arfcn: 640000                  # ARFCN of the downlink carrier (center frequency).
+    band: 78                          # The NR band.
     channel_bandwidth_MHz: 20         # Bandwith in MHz. Number of PRBs will be automatically derived.
-    common_scs: 15                    # Subcarrier spacing in kHz used for data.
+    common_scs: 30                    # Subcarrier spacing in kHz used for data.
     plmn: "00101"                     # PLMN broadcasted by the gNB.
     tac: 1                            # Tracking area code (needs to match the core configuration).
+    pci: 0                            # added: Physical cell ID.
     pdcch:
       common:
         ss0_index: 0                  # Set search space zero index to match srsUE capabilities
