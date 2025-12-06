@@ -9,7 +9,7 @@ on:
         default: "all"
 
 env:
-  GHCR_USER: salimKarroum
+  GHCR_USER: salimkarroum
   TAG: v1.0
 
 jobs:
@@ -81,4 +81,5 @@ jobs:
       - name: Log out
         if: always()
         run: docker logout ghcr.io
+
 
