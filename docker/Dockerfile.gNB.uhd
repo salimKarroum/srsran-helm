@@ -1,9 +1,8 @@
 # =========================
-# srsRAN gNB Dockerfile with UHD support
+# srsRAN gNB Dockerfile for Beamarmor5G with UHD and ZMQ
 # =========================
 
 ARG OS_VERSION=24.04
-ARG UHD_VERSION=4.7.0.0
 
 # =========================
 # Stage 1: Build Stage
@@ -35,27 +34,24 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-setuptools \
     python3-requests \
     ca-certificates \
+    libuhd-dev \
+    uhd-host \
+    libzmq3-dev \
     && rm -rf /var/lib/apt/lists/*
 
-RUN git clone https://github.com/srsran/srsRAN_Project.git /src
-
-ARG UHD_VERSION
-
-RUN /src/docker/scripts/build_uhd.sh "${UHD_VERSION}"
-
-ENV UHD_DIR=/opt/uhd/${UHD_VERSION}
+RUN git clone https://github.com/ucsdwcsng/beamarmor5G.git /src
 
 # Build srsRAN with UHD enabled
-WORKDIR /src
+WORKDIR /src/srsRAN5G/srsRAN_Project-release_24_04
 
 RUN mkdir build && cd build && \
-    cmake ../ -DENABLE_EXPORT=ON -DENABLE_UHD=On -DCMAKE_INSTALL_PREFIX=/opt/srs && \
+    cmake ../ -DENABLE_EXPORT=ON -DENABLE_ZEROMQ=ON -DENABLE_UHD=On -DCMAKE_INSTALL_PREFIX=/opt/srs && \
     make -j$(nproc)
 
-RUN cp /src/build/apps/cu/srscu             /tmp/srscu                     && \
-    cp /src/build/apps/du/srsdu             /tmp/srsdu                     && \
-    cp /src/build/apps/gnb/gnb              /tmp/gnb                       && \
-    cd /src/build                                                          && \
+RUN cp /src/srsRAN5G/srsRAN_Project-release_24_04/build/apps/cu/srscu             /tmp/srscu                     && \
+    cp /src/srsRAN5G/srsRAN_Project-release_24_04/build/apps/du/srsdu             /tmp/srsdu                     && \
+    cp /src/srsRAN5G/srsRAN_Project-release_24_04/build/apps/gnb/gnb              /tmp/gnb                       && \
+    cd /src/srsRAN5G/srsRAN_Project-release_24_04/build                                                          && \
     make install                                                           && \
     mv /tmp/srscu                           /opt/srs/bin/srscu             && \
     mv /tmp/srsdu                           /opt/srs/bin/srsdu             && \
@@ -84,16 +80,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-dev \
     python3-requests \
     ca-certificates \
+    libzmq3-dev \
+    libuhd-dev \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /opt/srs /usr/local
 
-ARG UHD_VERSION
-
-COPY --from=builder /opt/uhd/${UHD_VERSION} /opt/uhd/${UHD_VERSION}
-
-ENV LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/opt/uhd/${UHD_VERSION}/lib/:/opt/uhd/${UHD_VERSION}/lib/x86_64-linux-gnu/:/opt/uhd/${UHD_VERSION}/lib/aarch64-linux-gnu/
-
-ENV PATH=$PATH:/opt/uhd/${UHD_VERSION}/bin/
-
 RUN uhd_images_downloader
+
