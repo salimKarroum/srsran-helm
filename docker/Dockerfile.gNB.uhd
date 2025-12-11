@@ -1,5 +1,6 @@
 # =========================
-# srsRAN gNB Dockerfile with UHD support (release_24_04)
+# srsRAN gNB Dockerfile with UHD + ZMQ
+# Based on beamarmor5G (srsRAN_Project-release_24_04)
 # =========================
 
 ARG OS_VERSION=24.04
@@ -39,12 +40,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libzmq3-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# 1) Cloner directement la release_24_04 de srsRAN_Project
-RUN git clone --branch release_24_04 --depth 1 https://github.com/srsran/srsRAN_Project.git /src
+# 1) Cloner beamarmor5G (qui contient déjà srsRAN_Project-release_24_04)
+RUN git clone https://github.com/ucsdwcsng/beamarmor5G.git /beamarmor5G
 
-# 2) Build srsRAN avec UHD (et ZMQ si tu en as besoin)
-WORKDIR /src
+# 2) Aller dans la version 24.04 de srsRAN incluse dans beamarmor5G
+WORKDIR /beamarmor5G/srsRAN5G/srsRAN_Project-release_24_04
 
+# 3) Build srsRAN avec UHD + ZMQ
 RUN mkdir build && cd build && \
     cmake .. \
       -DENABLE_EXPORT=ON \
@@ -85,19 +87,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Copier l'installation srsRAN faite dans /opt/srs
 COPY --from=builder /opt/srs /usr/local
 
-# (Optionnel) si tu veux un LD_LIBRARY_PATH propre (sans warning UndefinedVar)
+# (Optionnel) LD_LIBRARY_PATH propre
 ENV LD_LIBRARY_PATH="/usr/local/lib:/usr/local/lib/x86_64-linux-gnu"
 
-# (Optionnel) télécharger les images UHD
+# Télécharger les images UHD (pour USRP réel)
 RUN uhd_images_downloader || true
 
-# Commande par défaut (à adapter)
+# Ajouter les binaires srsRAN au PATH
+ENV PATH="/usr/local/bin:${PATH}"
+
+# Commande par défaut (à adapter selon ton usage)
 CMD ["gnb", "--help"]
-
-
-
-
-
-
-
-
