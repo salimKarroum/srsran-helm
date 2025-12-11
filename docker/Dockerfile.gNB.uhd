@@ -1,8 +1,9 @@
 # =========================
-# srsRAN gNB Dockerfile for Beamarmor5G with UHD and ZMQ
+# srsRAN gNB Dockerfile with UHD support (release_24_04)
 # =========================
 
 ARG OS_VERSION=24.04
+ARG UHD_VERSION=4.7.0.0
 
 # =========================
 # Stage 1: Build Stage
@@ -11,30 +12,51 @@ FROM ubuntu:${OS_VERSION} AS builder
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Outils de base pour récupérer le repo
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
+    cmake \
+    make \
+    gcc \
+    g++ \
+    pkg-config \
+    libfftw3-dev \
+    libmbedtls-dev \
+    libsctp-dev \
+    libyaml-cpp-dev \
+    libgtest-dev \
+    curl \
+    apt-transport-https \
+    xz-utils \
+    build-essential \
+    libboost-all-dev \
+    libusb-1.0-0-dev \
+    python3-mako \
+    python3-numpy \
+    python3-setuptools \
+    python3-requests \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# 1) Cloner Beamarmor5G
-RUN git clone https://github.com/ucsdwcsng/beamarmor5G.git /src
+# 1) Cloner directement la release_24_04 de srsRAN_Project
+RUN git clone --branch release_24_04 --depth 1 https://github.com/srsran/srsRAN_Project.git /src
 
-# 2) Aller dans la release 24.04 de srsRAN
-WORKDIR /src/srsRAN5G/srsRAN_Project-release_24_04
+ARG UHD_VERSION
 
-# 3) Rendre les scripts exécutables
-RUN chmod +x .gitlab/ci/builders/install_dependencies.sh \
-              .gitlab/ci/builders/builder.sh
+# 2) Construire UHD avec le script officiel de srsRAN
+RUN /src/docker/scripts/build_uhd.sh "${UHD_VERSION}"
 
-# 4) Installer toutes les dépendances (build + run + extra : UHD, ZMQ, etc.)
-RUN .gitlab/ci/builders/install_dependencies.sh all
+ENV UHD_DIR=/opt/uhd/${UHD_VERSION}
 
-# 5) Builder srsRAN (le script crée build/, lance cmake + make)
-RUN .gitlab/ci/builders/builder.sh .
+# 3) Build srsRAN avec UHD activé
+WORKDIR /src
 
-# 6) Installer dans /usr/local (binaire gnb, libs, etc.)
-RUN cd build && make install
+RUN mkdir build && cd build && \
+    cmake .. \
+      -DENABLE_EXPORT=ON \
+      -DENABLE_UHD=ON \
+      -DCMAKE_INSTALL_PREFIX=/opt/srs \
+    && make -j"$(nproc)" \
+    && make install
 
 # =========================
 # Stage 2: Runtime Stage
@@ -43,26 +65,38 @@ FROM ubuntu:${OS_VERSION}
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Copier le script d’install des dépendances côté runtime
-COPY --from=builder /src/srsRAN5G/srsRAN_Project-release_24_04/.gitlab/ci/builders/install_dependencies.sh /usr/local/bin/install_dependencies.sh
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libfftw3-dev \
+    libmbedtls-dev \
+    libsctp-dev \
+    libyaml-cpp-dev \
+    libgtest-dev \
+    cpufrequtils \
+    inetutils-tools \
+    libboost-all-dev \
+    libncurses5-dev \
+    libusb-1.0-0 \
+    libusb-1.0-0-dev \
+    libusb-dev \
+    python3-dev \
+    python3-requests \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
 
-RUN chmod +x /usr/local/bin/install_dependencies.sh && \
-    # Dépendances runtime (FFTW, SCTP, YAML, mbedtls, etc.)
-    /usr/local/bin/install_dependencies.sh run && \
-    # Extras (ZeroMQ, UHD, etc.)
-    /usr/local/bin/install_dependencies.sh extra && \
-    apt-get autoremove -y && apt-get clean && rm -rf /var/lib/apt/lists/*
+# 4) Copier srsRAN installé
+COPY --from=builder /opt/srs /usr/local
 
-# Copier les binaires/libraries installés par make install
-COPY --from=builder /usr/local /usr/local
+# 5) Copier UHD
+ARG UHD_VERSION
+COPY --from=builder /opt/uhd/${UHD_VERSION} /opt/uhd/${UHD_VERSION}
 
-# (Optionnel) télécharger les images UHD si tu utilises un vrai SDR
+ENV LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/opt/uhd/${UHD_VERSION}/lib/:/opt/uhd/${UHD_VERSION}/lib/x86_64-linux-gnu/:/opt/uhd/${UHD_VERSION}/lib/aarch64-linux-gnu/
+ENV PATH=$PATH:/opt/uhd/${UHD_VERSION}/bin/
+
 RUN uhd_images_downloader || true
 
-ENV PATH="/usr/local/bin:${PATH}"
-
-# Commande par défaut (à adapter selon ton chart Helm)
-CMD ["gnb", "--help"]
+# (optionnel)
+# CMD ["gnb", "--help"]
 
 
 
