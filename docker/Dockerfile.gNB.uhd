@@ -41,21 +41,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 RUN git clone https://github.com/ucsdwcsng/beamarmor5G.git /src
 
-# Build srsRAN with UHD enabled
+# Build srsRAN with UHD + ZMQ enabled
 WORKDIR /src/srsRAN5G/srsRAN_Project-release_24_04
 
 RUN mkdir build && cd build && \
-    cmake ../ -DENABLE_EXPORT=ON -DENABLE_ZEROMQ=ON -DENABLE_UHD=On -DCMAKE_INSTALL_PREFIX=/opt/srs && \
-    make -j$(nproc)
-
-RUN cp /src/srsRAN5G/srsRAN_Project-release_24_04/build/apps/cu/srscu             /tmp/srscu                     && \
-    cp /src/srsRAN5G/srsRAN_Project-release_24_04/build/apps/du/srsdu             /tmp/srsdu                     && \
-    cp /src/srsRAN5G/srsRAN_Project-release_24_04/build/apps/gnb/gnb              /tmp/gnb                       && \
-    cd /src/srsRAN5G/srsRAN_Project-release_24_04/build                                                          && \
-    make install                                                           && \
-    mv /tmp/srscu                           /opt/srs/bin/srscu             && \
-    mv /tmp/srsdu                           /opt/srs/bin/srsdu             && \
-    mv /tmp/gnb                             /opt/srs/bin/gnb
+    cmake ../ \
+      -DENABLE_EXPORT=ON \
+      -DENABLE_ZEROMQ=ON \
+      -DENABLE_UHD=ON \
+      -DCMAKE_INSTALL_PREFIX=/opt/srs \
+    && make -j$(nproc) \
+    && make install
 
 # =========================
 # Stage 2: Runtime Stage
@@ -87,4 +83,5 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY --from=builder /opt/srs /usr/local
 
 RUN uhd_images_downloader
+
 
