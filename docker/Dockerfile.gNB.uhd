@@ -7,81 +7,63 @@ ARG OS_VERSION=24.04
 # =========================
 # Stage 1: Build Stage
 # =========================
-FROM ubuntu:$OS_VERSION AS builder
+FROM ubuntu:${OS_VERSION} AS builder
 
 ENV DEBIAN_FRONTEND=noninteractive
 
+# Outils de base pour récupérer le repo
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
-    cmake \
-    make \
-    gcc \
-    g++ \
-    pkg-config \
-    libfftw3-dev \
-    libmbedtls-dev \
-    libsctp-dev \
-    libyaml-cpp-dev \
-    libgtest-dev \
-    curl \
-    apt-transport-https \
-    xz-utils \
-    build-essential \
-    libboost-all-dev \
-    libusb-1.0-0-dev \
-    python3-mako \
-    python3-numpy \
-    python3-setuptools \
-    python3-requests \
     ca-certificates \
-    libuhd-dev \
-    uhd-host \
-    libzmq3-dev \
     && rm -rf /var/lib/apt/lists/*
 
+# 1) Cloner Beamarmor5G
 RUN git clone https://github.com/ucsdwcsng/beamarmor5G.git /src
 
-# Build srsRAN with UHD + ZMQ enabled
+# 2) Aller dans la release 24.04 de srsRAN
 WORKDIR /src/srsRAN5G/srsRAN_Project-release_24_04
 
-RUN mkdir build && cd build && \
-    cmake ../ \
-      -DENABLE_EXPORT=ON \
-      -DENABLE_ZEROMQ=ON \
-      -DENABLE_UHD=ON \
-      -DCMAKE_INSTALL_PREFIX=/opt/srs \
-    && make -j$(nproc) \
-    && make install
+# 3) Rendre les scripts exécutables
+RUN chmod +x .gitlab/ci/builders/install_dependencies.sh \
+              .gitlab/ci/builders/builder.sh
+
+# 4) Installer toutes les dépendances (build + run + extra : UHD, ZMQ, etc.)
+RUN .gitlab/ci/builders/install_dependencies.sh all
+
+# 5) Builder srsRAN (le script crée build/, lance cmake + make)
+RUN .gitlab/ci/builders/builder.sh .
+
+# 6) Installer dans /usr/local (binaire gnb, libs, etc.)
+RUN cd build && make install
 
 # =========================
 # Stage 2: Runtime Stage
 # =========================
-FROM ubuntu:$OS_VERSION
+FROM ubuntu:${OS_VERSION}
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    libfftw3-dev \
-    libmbedtls-dev \
-    libsctp-dev \
-    libyaml-cpp-dev \
-    libgtest-dev \
-    cpufrequtils \
-    inetutils-tools \
-    libboost-all-dev \
-    libncurses5-dev \
-    libusb-1.0-0 \
-    libusb-1.0-0-dev \
-    libusb-dev \
-    python3-dev \
-    python3-requests \
-    ca-certificates \
-    libzmq3-dev \
-    libuhd-dev \
-    && rm -rf /var/lib/apt/lists/*
+# Copier le script d’install des dépendances côté runtime
+COPY --from=builder /src/srsRAN5G/srsRAN_Project-release_24_04/.gitlab/ci/builders/install_dependencies.sh /usr/local/bin/install_dependencies.sh
 
-COPY --from=builder /opt/srs /usr/local
+RUN chmod +x /usr/local/bin/install_dependencies.sh && \
+    # Dépendances runtime (FFTW, SCTP, YAML, mbedtls, etc.)
+    /usr/local/bin/install_dependencies.sh run && \
+    # Extras (ZeroMQ, UHD, etc.)
+    /usr/local/bin/install_dependencies.sh extra && \
+    apt-get autoremove -y && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-RUN uhd_images_downloader
+# Copier les binaires/libraries installés par make install
+COPY --from=builder /usr/local /usr/local
+
+# (Optionnel) télécharger les images UHD si tu utilises un vrai SDR
+RUN uhd_images_downloader || true
+
+ENV PATH="/usr/local/bin:${PATH}"
+
+# Commande par défaut (à adapter selon ton chart Helm)
+CMD ["gnb", "--help"]
+
+
 
 
