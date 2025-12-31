@@ -1,6 +1,7 @@
 # =========================
 # srsRAN gNB Dockerfile with UHD + ZMQ
 # Based on beamarmor5G (srsRAN_Project-release_24_04)
+# Fix: install cppzmq headers (zmq.hpp) from GitHub (header-only)
 # =========================
 
 ARG OS_VERSION=24.04
@@ -9,9 +10,9 @@ ARG OS_VERSION=24.04
 # Stage 1: Build Stage
 # =========================
 FROM ubuntu:${OS_VERSION} AS builder
-
 ENV DEBIAN_FRONTEND=noninteractive
 
+# ---- Build dependencies (incl. UHD + ZeroMQ C library) ----
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     cmake \
@@ -30,6 +31,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     libboost-all-dev \
     libusb-1.0-0-dev \
+    python3 \
     python3-mako \
     python3-numpy \
     python3-setuptools \
@@ -40,15 +42,23 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libzmq3-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# 1) Cloner beamarmor5G (qui contient déjà srsRAN_Project-release_24_04)
+# ---- Option B1: install cppzmq headers (zmq.hpp) from GitHub (header-only) ----
+RUN git clone --depth 1 https://github.com/zeromq/cppzmq.git /tmp/cppzmq && \
+    cp /tmp/cppzmq/zmq.hpp /usr/local/include/ && \
+    cp /tmp/cppzmq/zmq_addon.hpp /usr/local/include/ && \
+    rm -rf /tmp/cppzmq && \
+    test -f /usr/local/include/zmq.hpp
+
+# 1) Clone beamarmor5G (contains srsRAN_Project-release_24_04)
 RUN git clone https://github.com/ucsdwcsng/beamarmor5G.git /beamarmor5G
 
-# 2) Aller dans la version 24.04 de srsRAN incluse dans beamarmor5G
+# 2) Go to the embedded srsRAN Project release_24_04
 WORKDIR /beamarmor5G/srsRAN5G/srsRAN_Project-release_24_04
 
-# 3) Build srsRAN avec UHD + ZMQ, et WERROR désactivé
-RUN mkdir build && cd build && \
+# 3) Build srsRAN with UHD + ZMQ, WERROR disabled
+RUN rm -rf build && mkdir build && cd build && \
     cmake .. \
+      -DCMAKE_BUILD_TYPE=Release \
       -DENABLE_EXPORT=ON \
       -DENABLE_UHD=ON \
       -DENABLE_ZEROMQ=ON \
@@ -61,9 +71,10 @@ RUN mkdir build && cd build && \
 # Stage 2: Runtime Stage
 # =========================
 FROM ubuntu:${OS_VERSION}
-
 ENV DEBIAN_FRONTEND=noninteractive
 
+# NOTE: This keeps your original "dev" runtime deps (works fine, larger image).
+# You can later slim it down to runtime-only libs if you want.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libfftw3-dev \
     libmbedtls-dev \
@@ -85,20 +96,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libzmq3-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Copier l'installation srsRAN faite dans /opt/srs
+# Copy srsRAN install from builder
 COPY --from=builder /opt/srs /usr/local
 
-# LD_LIBRARY_PATH propre
+# Ensure runtime can find libs
 ENV LD_LIBRARY_PATH="/usr/local/lib:/usr/local/lib/x86_64-linux-gnu"
-
-# Télécharger les images UHD (pour USRP réel)
-RUN uhd_images_downloader || true
-
-# Ajouter les binaires srsRAN au PATH
 ENV PATH="/usr/local/bin:${PATH}"
 
-# Commande par défaut (à adapter)
+# Download UHD images (for real USRP)
+RUN uhd_images_downloader || true
+
+# Default command
 CMD ["gnb", "--help"]
-
-
-
