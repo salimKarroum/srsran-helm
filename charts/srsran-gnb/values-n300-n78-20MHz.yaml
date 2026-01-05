@@ -10,7 +10,7 @@
 
 image:
   repository: ghcr.io/salimkarroum/srsran-gnb
-  tag: v1.0
+  tag: latest
   pullPolicy: IfNotPresent
 
 resources:
@@ -118,6 +118,7 @@ gnbConfig:
     enabled: true
 
     port: 8001
+
 
 
 
