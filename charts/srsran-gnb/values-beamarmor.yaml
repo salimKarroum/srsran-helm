@@ -1,0 +1,10 @@
+image:
+  repository: ghcr.io/salimkarroum/srsran-gnb
+  tag: beamarmor-24.04-uhd-zmq
+  pullPolicy: IfNotPresent
+
+# IMPORTANT pour UHD réel
+hostNetwork: true
+
+securityContext:
+  privileged: true
