@@ -16,15 +16,18 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Set lower-case owner
+        id: vars
+        run: echo "owner_lc=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_OUTPUT"
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Login to GitHub Container Registry
+      - name: Login to GHCR
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
@@ -38,5 +41,6 @@ jobs:
           file: docker/Dockerfile.gNB.uhd
           push: true
           tags: |
-            ghcr.io/${{ github.repository_owner }}/srsran-gnb:beamarmor-24.04-uhd-zmq
-            ghcr.io/${{ github.repository_owner }}/srsran-gnb:latest
+            ghcr.io/${{ steps.vars.outputs.owner_lc }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
+            ghcr.io/${{ steps.vars.outputs.owner_lc }}/${{ env.IMAGE_NAME }}:latest
+
