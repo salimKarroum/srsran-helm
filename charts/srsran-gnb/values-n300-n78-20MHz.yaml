@@ -9,7 +9,7 @@
 #
 
 image:
-  repository: ghcr.io/ziyad-mabrouk/srsran-gnb-uhd
+  repository: ghcr.io/salimkarroum/srsran-gnb
   tag: v1.0
   pullPolicy: IfNotPresent
 
@@ -118,6 +118,7 @@ gnbConfig:
     enabled: true
 
     port: 8001
+
 
 
 
