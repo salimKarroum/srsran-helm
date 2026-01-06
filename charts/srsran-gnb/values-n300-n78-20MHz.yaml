@@ -10,8 +10,9 @@
 
 image:
   repository: ghcr.io/salimkarroum/srsran-gnb
-  tag: latest
-  pullPolicy: IfNotPresent
+  tag: beamarmor-24.04-uhd-zmq
+  pullPolicy: Always
+
 
 resources:
   define: false      # If false, no resources section is added
@@ -118,6 +119,7 @@ gnbConfig:
     enabled: true
 
     port: 8001
+
 
 
 
