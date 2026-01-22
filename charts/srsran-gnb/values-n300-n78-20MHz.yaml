@@ -30,98 +30,58 @@ start:
 gnbIp: 10.10.3.231
 
 gnbConfig:
-  cu_cp:
-    inactivity_timer: 7200
-    request_pdu_session_timeout: 30
-    amf:
-      sctp_rto_initial: 200
-      sctp_rto_min: 200
-      sctp_rto_max: 2000
-      sctp_init_max_attempts: 5
-      sctp_hb_interval: 1000
-      sctp_assoc_max_retx: 5
-      sctp_nodelay: true
-      addr: 10.10.3.200
-      port: 38412
-      bind_addr: 10.10.3.231
-      supported_tracking_areas:
-        - tac: 1
-          plmn_list:
-            - plmn: "00101"
-              tai_slice_support_list:
-                - sst: 1
-                - sst: 1
-                  sd: "000002"
+  gnb_id: 411
+  gnb_id_bit_length: 32
+  ran_node_name: srsgnb01
+
+  amf:
+    addr: 10.10.3.200
+    port: 38412
+    bind_addr: 10.10.3.231
+
+  slicing:
+    - sst: 1
+    - sst: 1
+      sd: 2
 
   ru_sdr:
-    device_driver: uhd                # The RF driver name.
-    device_args: addr=192.168.235.103 # USRP N300 IP address.
-    srate: 61.44                      # RF sample rate might need to be adjusted according to selected bandwidth.
+    device_driver: uhd
+    device_args: addr=192.168.235.104
+    srate: 61.44
+    tx_gain: 35        # NOTE: high for N300, consider ≤30
+    rx_gain: 60
+    freq_offset: 0
     clock: internal
-    sync: internal                        
-    tx_gain: 35                       # Transmit gain of the RF might need to adjusted to the given situation.
-    rx_gain: 60                       # Receive gain of the RF might need to adjusted to the given situation.
+    sync: internal
 
   cell_cfg:
-    dl_arfcn: 640000                  # ARFCN of the downlink carrier (center frequency).
-    band: 78                          # The NR band.
-    channel_bandwidth_MHz: 20         # Bandwith in MHz. Number of PRBs will be automatically derived.
-    common_scs: 30                    # Subcarrier spacing in kHz used for data.
-    plmn: "00101"                     # PLMN broadcasted by the gNB.
-    tac: 1                            # Tracking area code (needs to match the core configuration).
-    pci: 0                            # added: Physical cell ID.
+    pci: 0
+    dl_arfcn: 640000
+    band: 78
+    common_scs: 30
+    channel_bandwidth_MHz: 20
+    plmn: "00101"
+    tac: 1
+
+    nof_antennas_dl: 1
+    nof_antennas_ul: 1
+
     pdcch:
       common:
-        ss0_index: 0                  # Set search space zero index to match srsUE capabilities
-        coreset0_index: 12            # Set search CORESET Zero index to match srsUE capabilities
+        ss0_index: 0
+        coreset0_index: 12
       dedicated:
-        ss2_type: common              # Search Space type, has to be set to common
-        dci_format_0_1_and_1_1: false # Set correct DCI format (fallback)
+        ss2_type: common
+        dci_format_0_1_and_1_1: 0
+
     prach:
-      prach_config_index: 1           # Sets PRACH config to match what is expected by srsUE
+      prach_config_index: 1
+
     pdsch:
-      mcs_table: qam64                # Sets PDSCH MCS to 64 QAM
+      mcs_table: qam64
+
     pusch:
-      mcs_table: qam64                # Sets PUSCH MCS to 64 QAM
-    slicing:
-      - sst: 1
-      - sst: 1
-        sd: "000002"
+      mcs_table: qam64
 
-  log:
-    filename: /tmp/gnb.log
-    all_level: warning
-    config_level: debug
-
-  metrics:
-    enable_log: false
-    autostart_stdout_metrics: true
-    enable_json: true
-    layers:
-      enable_app_usage: true
-      enable_e1ap: true
-      enable_pdcp: true
-      enable_sched: true
-      enable_rlc: true            
-      enable_mac: true            
-      enable_executor: true
-      enable_du_low: true
-      enable_ru: true
-
-  pcap:
-    mac_enable: false
-    mac_filename: /tmp/gnb_mac.pcap
-    ngap_enable: false
-    ngap_filename: /tmp/gnb_ngap.pcap
-
-  remote_control:
-    bind_addr: 0.0.0.0
-    enabled: true
-
-    port: 8001
-
-
-
-
-
-
+    ssb:
+      ssb_period: 10
