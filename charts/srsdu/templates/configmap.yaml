@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: du-configmap
+  labels:
+    {{- include "srsdu.labels" . | nindent 4 }}
+data:
+  srsdu.yaml: |-
+{{ toYaml .Values.duConfig | indent 4 }}

@@ -1,0 +1,92 @@
+# =========================
+# cu values file for UHD setup with USRP N300 -- n78 band -- NOT TESTED YET
+# =========================
+# recommended RF gain values for N300 on FR1
+# Avoid setting TX gain above ~30 dB on N3xx at FR1 frequencies to prevent excessive distortion.
+# tx_gain: 20–30
+# rx_gain: 25–40
+# other possible ARFCN: 627000 (3400 MHz), 636666 (3500 MHz), 648000 (3700 MHz)
+#
+
+image:
+  repository: ghcr.io/ziyad-mabrouk/srsran-gnb-uhd
+  tag: v1.0
+  pullPolicy: IfNotPresent
+
+resources:
+  define: false      # If false, no resources section is added
+  requests:
+    cpu: "50m"
+    memory: "3000Mi"
+  limits:
+    cpu: "5000m"
+    memory: "3000Mi"
+
+start:
+  cu: true          # If false, the cu container will just sleep and not start srsRAN cu
+  logs: true         # If false, the cu-log container will not be deployed
+
+cuIp: 10.10.3.231
+f1IP: 10.10.3.241
+
+cuConfig:
+  cu_cp:
+    inactivity_timer: 7200
+    request_pdu_session_timeout: 30
+    amf:
+      sctp_rto_initial: 200
+      sctp_rto_min: 200
+      sctp_rto_max: 2000
+      sctp_init_max_attempts: 5
+      sctp_hb_interval: 1000
+      sctp_assoc_max_retx: 5
+      sctp_nodelay: true
+      addr: 10.10.3.200
+      port: 38412
+      bind_addr: 10.10.3.231
+      supported_tracking_areas:
+        - tac: 1
+          plmn_list:
+            - plmn: "00101"
+              tai_slice_support_list:
+                - sst: 1
+                - sst: 1
+                  sd: "000002"
+  
+    f1ap:
+      bind_addr: 10.10.3.241                # Configure the F1AP bind address, this will enable the CU-cp to connect to the DU
+
+  cu_up:
+    f1u:
+      socket:                               # Define UDP/IP socket(s) for F1-U interface.
+        -                                     # Socket 1
+          bind_addr: 10.10.3.241                 # Sets the address that the F1-U socket will bind to.
+
+  # log:
+  #   filename: /tmp/cu.log
+  #   all_level: warning
+  #   config_level: debug
+
+  # metrics:
+  #   enable_log: false
+  #   autostart_stdout_metrics: true
+  #   enable_json: true
+  #   layers:
+  #     enable_app_usage: true
+  #     enable_e1ap: true
+  #     enable_pdcp: true
+  #     enable_sched: true
+  #     enable_rlc: true            
+  #     enable_mac: true            
+  #     enable_executor: true
+  #     enable_du_low: true
+  #     enable_ru: true
+
+  # remote_control:
+  #   bind_addr: 0.0.0.0
+  #   enabled: true
+
+  #   port: 8001
+
+
+

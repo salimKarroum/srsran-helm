@@ -1,0 +1,76 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "srscu.fullname" . }}
+  labels:
+    {{- include "srscu.labels" . | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "srscu.selectorLabels" . | nindent 6 }}
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        {{- include "srscu.selectorLabels" . | nindent 8 }}
+      annotations:
+        k8s.v1.cni.cncf.io/networks: '[{ "name": "n3network", "interface": "n3", "ips": [ "{{ .Values.cuIp }}/24", "{{ .Values.f1Ip }}/24" ] }]'
+    spec:
+      containers:
+        - name: cu
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["/bin/bash", "-c"]
+          args:
+          {{- if .Values.start.cu }}
+            - /usr/local/bin/srscu -c /srsran/config/srscu.yaml
+          {{- else }}
+            - sleep infinity
+          {{- end }}
+          securityContext:
+            capabilities:
+              add: ["NET_ADMIN"]
+            privileged: true
+          lifecycle:
+            preStop:
+              exec:
+                command: ["/bin/sh", "-c", "rm -rf /mnt/*_log.txt"]
+          volumeMounts:
+            - mountPath: /srsran/config
+              name: cu-volume
+            - mountPath: /var/log/
+              name: varlog
+            - name: host-mount
+              mountPath: /mnt/
+          {{- if .Values.resources.define}}
+          resources:
+            requests:
+              memory: {{ .Values.resources.requests.tcpdump.memory | quote }}
+              cpu: {{ .Values.resources.requests.tcpdump.cpu | quote }}
+            limits:
+              memory: {{ .Values.resources.limits.tcpdump.memory | quote }}
+              cpu: {{ .Values.resources.limits.tcpdump.cpu | quote }}
+          {{- end}}
+      {{- if .Values.start.logs }}
+        - name: cu-logs
+          image: busybox
+          args: [/bin/sh, -c, 'while ! tail -f /var/log/cu.log 2>/dev/null; do sleep 1 ; done']
+          volumeMounts:
+            - mountPath: /var/log/
+              name: varlog
+      {{- end }}
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      volumes:
+        - name: cu-volume
+          configMap:
+            name: cu-configmap
+            items:
+              - key: srscu.yaml
+                path: srscu.yaml
+        - name: varlog
+          emptyDir: {}
+        - name: host-mount
+          hostPath:
+            path: /mnt/
+            type: Directory

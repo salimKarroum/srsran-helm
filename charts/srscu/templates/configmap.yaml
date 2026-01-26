@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cu-configmap
+  labels:
+    {{- include "srscu.labels" . | nindent 4 }}
+data:
+  srscu.yaml: |-
+{{ toYaml .Values.cuConfig | indent 4 }}
