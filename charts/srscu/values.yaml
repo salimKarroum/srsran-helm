@@ -26,7 +26,7 @@ start:
   cu: true          # If false, the cu container will just sleep and not start srsRAN cu
   logs: true         # If false, the cu-log container will not be deployed
 
-cuIp: 10.10.3.231
+cuIP: 10.10.3.231
 f1IP: 10.10.3.241
 
 cuConfig:
@@ -87,6 +87,7 @@ cuConfig:
   #   enabled: true
 
   #   port: 8001
+
 
 
 
