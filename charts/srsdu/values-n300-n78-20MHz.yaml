@@ -26,7 +26,7 @@ start:
   du: true          # If false, the du container will just sleep and not start srsRAN du
   logs: true         # If false, the du-log container will not be deployed
 
-duIp: 10.10.3.232
+duIP: 10.10.3.232
 
 duConfig:
   f1ap:
@@ -98,6 +98,7 @@ duConfig:
   #   enabled: true
 
   #   port: 8001
+
 
 
 
