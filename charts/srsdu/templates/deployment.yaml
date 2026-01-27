@@ -14,7 +14,7 @@ spec:
       labels:
         {{- include "srsdu.selectorLabels" . | nindent 8 }}
       annotations:
-        k8s.v1.cni.cncf.io/networks: '[{ "name": "n3network", "interface": "n3", "ips": [ "{{ .Values.duIp }}/24" ] }]'
+        k8s.v1.cni.cncf.io/networks: '[{ "name": "n3network", "interface": "n3", "ips": [ "{{ .Values.duIP }}/24" ] }]'
     spec:
       containers:
         - name: du
@@ -74,3 +74,4 @@ spec:
           hostPath:
             path: /mnt/
             type: Directory
+
