@@ -14,7 +14,7 @@ spec:
       labels:
         {{- include "srscu.selectorLabels" . | nindent 8 }}
       annotations:
-        k8s.v1.cni.cncf.io/networks: '[{ "name": "n3network", "interface": "n3", "ips": [ "{{ .Values.cuIp }}/24", "{{ .Values.f1Ip }}/24" ] }]'
+        k8s.v1.cni.cncf.io/networks: '[{ "name": "n3network", "interface": "n3", "ips": [ "{{ .Values.cuIP }}/24", "{{ .Values.f1IP }}/24" ] }]'
     spec:
       containers:
         - name: cu
@@ -74,3 +74,4 @@ spec:
           hostPath:
             path: /mnt/
             type: Directory
+
