@@ -13,7 +13,6 @@ image:
   tag: beamarmor-24.04-uhd-zmq
   pullPolicy: Always
 
-
 resources:
   define: false      # If false, no resources section is added
   requests:
@@ -48,8 +47,9 @@ gnbConfig:
     device_driver: uhd
     device_args: addr=192.168.235.104
     srate: 61.44
-    tx_gain: 35        # NOTE: high for N300, consider ≤30
-    rx_gain: 60
+    # Gains: start safer for N300, then tune
+    tx_gain: 28
+    rx_gain: 35
     freq_offset: 0
     clock: internal
     sync: internal
@@ -86,4 +86,8 @@ gnbConfig:
     ssb:
       ssb_period: 10
 
-
+  # .Values.gnbConfig.remote_control.enabled
+  remote_control:
+    enabled: false
+    bind_addr: 0.0.0.0
+    port: 8001
