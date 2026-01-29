@@ -86,8 +86,5 @@ gnbConfig:
     ssb:
       ssb_period: 10
 
-  # .Values.gnbConfig.remote_control.enabled
-  remote_control:
-    enabled: false
-    bind_addr: 0.0.0.0
-    port: 8001
+  
+
