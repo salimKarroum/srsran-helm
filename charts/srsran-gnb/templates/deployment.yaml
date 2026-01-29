@@ -14,7 +14,7 @@ spec:
       labels:
         {{- include "srsran-gnb.selectorLabels" . | nindent 8 }}
       annotations:
-        k8s.v1.cni.cncf.io/networks: '[{ "name": "n3network", "interface": "n3", "ips": [ "{{ .Values.gnbIp }}/24" ] }]'
+        k8s.v1.cni.cncf.io/networks: '[{ "name": "open5gs/n3network", "interface": "n3", "ips": [ "{{ .Values.gnbIp }}/24" ] }]'
     spec:
       containers:
         - name: gnb
@@ -78,3 +78,4 @@ spec:
           hostPath:
             path: /mnt/
             type: Directory
+
