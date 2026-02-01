@@ -14,7 +14,7 @@ spec:
       labels:
         {{- include "srsran-gnb.selectorLabels" . | nindent 8 }}
       annotations:
-        k8s.v1.cni.cncf.io/networks: '[{ "name": "open5gs/n3network", "interface": "n3", "ips": [ "{{ .Values.gnbIp }}/24" ] }]'
+        k8s.v1.cni.cncf.io/networks: '[{ "name": "n3network", "interface": "n3", "ips": [ "{{ .Values.gnbIp }}/24" ] }]'
     spec:
       containers:
         - name: gnb
@@ -27,10 +27,6 @@ spec:
           {{- else }}
             - sleep infinity
           {{- end }}
-          ports:
-            - name: metrics
-              containerPort: {{ .Values.gnbConfig.remote_control.port }}
-              protocol: TCP
           securityContext:
             capabilities:
               add: ["NET_ADMIN"]
@@ -78,4 +74,5 @@ spec:
           hostPath:
             path: /mnt/
             type: Directory
+
 
