@@ -1,80 +1,59 @@
-# ===============================================================
-# Image (OBLIGATOIRE – corrige ton erreur Helm)
-# ===============================================================
-image:
-  repository: ghcr.io/srsran/srsran-gnb
-  tag: latest
-  pullPolicy: IfNotPresent
+# =========================
+# gNB values file for UHD setup with USRP N300 -- n78 band -- NOT TESTED YET
+# =========================
+# recommended RF gain values for N300 on FR1
+# Avoid setting TX gain above ~30 dB on N3xx at FR1 frequencies to prevent excessive distortion.
+# tx_gain: 20–30
+# rx_gain: 25–40
+# other possible ARFCN: 627000 (3400 MHz), 636666 (3500 MHz), 648000 (3700 MHz)
+#
 
-# ===============================================================
-# gNB Pod IP (OBLIGATOIRE – utilisé par Multus n3network)
-# ===============================================================
+image:
+  repository: ghcr.io/salimkarroum/srsran-gnb
+  tag: beamarmor-24.04-uhd-zmq
+  pullPolicy: Always
+
+
+resources:
+  define: false      # If false, no resources section is added
+  requests:
+    cpu: "50m"
+    memory: "3000Mi"
+  limits:
+    cpu: "5000m"
+    memory: "3000Mi"
+
+start:
+  gnb: true          # If false, the gNB container will just sleep and not start srsRAN gNB
+  logs: true         # If false, the gnb-log container will not be deployed
+
 gnbIp: 10.10.3.231
 
-# ===============================================================
-# Start options
-# ===============================================================
-start:
-  gnb: true
-  logs: true
-
-# ===============================================================
-# Resources (désactivé pour éviter erreurs tcpdump)
-# ===============================================================
-resources:
-  define: false
-
-# ===============================================================
-# gNB Configuration (montée dans /srsran/config/srsran-gnb.yaml)
-# ===============================================================
 gnbConfig:
-
-  # -------------------------------
-  # Identity
-  # -------------------------------
   gnb_id: 411
   gnb_id_bit_length: 32
   ran_node_name: srsgnb01
 
-  # -------------------------------
-  # Remote control (REQUIRED by chart)
-  # -------------------------------
-  remote_control:
-    enabled: false
-    port: 9090
-
-  # -------------------------------
-  # AMF connection
-  # -------------------------------
   amf:
     addr: 10.10.3.200
     port: 38412
     bind_addr: 10.10.3.231
 
-  # -------------------------------
-  # Network slicing
-  # -------------------------------
   slicing:
     - sst: 1
     - sst: 1
       sd: 2
 
-  # -------------------------------
-  # Radio Unit – USRP N300
-  # -------------------------------
   ru_sdr:
     device_driver: uhd
     device_args: addr=192.168.235.104
     srate: 61.44
-    tx_gain: 28
-    rx_gain: 35
+    tx_gain: 35        # NOTE: high for N300, consider ≤30
+    rx_gain: 60
     freq_offset: 0
     clock: internal
     sync: internal
 
-  # -------------------------------
-  # Cell configuration (FR1 – n78 – 20 MHz)
-  # -------------------------------
   cell_cfg:
     pci: 0
     dl_arfcn: 640000
@@ -87,9 +66,6 @@ gnbConfig:
     nof_antennas_dl: 1
     nof_antennas_ul: 1
 
-    # ---------------------------
-    # PDCCH
-    # ---------------------------
     pdcch:
       common:
         ss0_index: 0
@@ -98,23 +74,14 @@ gnbConfig:
         ss2_type: common
         dci_format_0_1_and_1_1: 0
 
-    # ---------------------------
-    # PRACH
-    # ---------------------------
     prach:
       prach_config_index: 1
 
-    # ---------------------------
-    # Downlink / Uplink
-    # ---------------------------
     pdsch:
       mcs_table: qam64
 
     pusch:
       mcs_table: qam64
 
-    # ---------------------------
-    # SSB
-    # ---------------------------
     ssb:
       ssb_period: 10
