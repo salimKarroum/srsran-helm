@@ -7,10 +7,7 @@
 # rx_gain: 25–40
 # other possible ARFCN: 627000 (3400 MHz), 636666 (3500 MHz), 648000 (3700 MHz)
 #
-hostNetwork: true
 
-securityContext:
-  privileged: true
 image:
   repository: ghcr.io/salimkarroum/srsran-gnb
   tag: beamarmor-24.04-uhd-zmq
@@ -88,4 +85,5 @@ gnbConfig:
 
     ssb:
       ssb_period: 10
+
 
