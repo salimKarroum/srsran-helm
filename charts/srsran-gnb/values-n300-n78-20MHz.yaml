@@ -46,7 +46,7 @@ gnbConfig:
 
   ru_sdr:
     device_driver: uhd
-    device_args: addr=192.168.235.104
+    device_args: serial=31D98C7,mgmt_addr=192.168.235.103
     srate: 61.44
     tx_gain: 35        # NOTE: high for N300, consider ≤30
     rx_gain: 60
@@ -85,5 +85,6 @@ gnbConfig:
 
     ssb:
       ssb_period: 10
+
 
 
