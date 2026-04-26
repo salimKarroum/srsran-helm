@@ -1,0 +1,6 @@
+apiVersion: v2
+name: osc-ric
+description: Helm chart for O-RAN Software Community Near-Real-Time RIC
+type: application
+version: 1.0.0
+appVersion: "6.0.0"

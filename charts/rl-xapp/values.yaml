@@ -1,0 +1,62 @@
+# =========================
+# RL xApp values
+# =========================
+
+image:
+  repository: ghcr.io/salimkarroum/rl-xapp
+  tag: v1.0
+  pullPolicy: IfNotPresent
+
+# Adresse du Near-RT RIC (E2 Manager REST API)
+ric:
+  host: osc-ric-e2mgr     # nom du service Kubernetes du RIC
+  port: 3800
+
+# Adresse du Subscription Manager
+submgr:
+  host: osc-ric-submgr
+  port: 8088
+
+# Slices 5G et leurs objectifs QoS
+slices:
+  embb:
+    sst: 1
+    sd: "000001"
+    targetThroughputMbps: 50    # débit cible en Mbps
+    minPrb: 10                  # PRBs minimum alloués
+  urllc:
+    sst: 1
+    sd: "000002"
+    targetLatencyMs: 5          # latence cible en ms
+    minPrb: 10
+  mmtc:
+    sst: 1
+    sd: "000003"
+    minPrb: 5
+
+# Paramètres PPO
+ppo:
+  learningRate: 0.0003
+  nSteps: 128           # steps avant chaque mise à jour de politique
+  batchSize: 64
+  nEpochs: 10
+  gamma: 0.99           # facteur de discount
+  clipRange: 0.2
+  totalTimesteps: 1000000
+
+# Intervalle de la boucle de contrôle (en secondes)
+controlLoopIntervalSec: 0.1
+
+# Métriques collectées via E2SM-KPM
+kpmMetrics:
+  - "DRB.UEThpDl"           # débit DL par UE
+  - "RRU.PrbUsedDl"         # PRBs utilisés DL
+  - "L1M.RS-SINR.Wideband"  # SINR par UE
+
+resources:
+  requests:
+    cpu: "200m"
+    memory: "512Mi"
+  limits:
+    cpu: "2000m"
+    memory: "2Gi"

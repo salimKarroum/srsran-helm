@@ -1,0 +1,25 @@
+# =========================
+# RL xApp Dockerfile
+# Python + PyTorch + stable-baselines3 (PPO)
+# =========================
+
+FROM python:3.11-slim
+
+ENV PYTHONUNBUFFERED=1
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    && rm -rf /var/lib/apt/lists/*
+
+# stable-baselines3 inclut PyTorch CPU par défaut (plus léger que GPU pour un xApp)
+RUN pip install --no-cache-dir \
+    stable-baselines3[extra]==2.3.2 \
+    gymnasium==0.29.1 \
+    requests==2.31.0 \
+    numpy==1.26.4
+
+WORKDIR /app
+
+# Le code xapp.py est injecté via ConfigMap Kubernetes
+# Ce CMD est un fallback pour tests locaux
+CMD ["python", "xapp.py"]

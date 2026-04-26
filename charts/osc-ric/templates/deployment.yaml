@@ -1,0 +1,146 @@
+---
+# Redis
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "osc-ric.fullname" . }}-redis
+  labels:
+    {{- include "osc-ric.labels" . | nindent 4 }}
+    component: redis
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: {{ include "osc-ric.fullname" . }}-redis
+  template:
+    metadata:
+      labels:
+        app: {{ include "osc-ric.fullname" . }}-redis
+    spec:
+      containers:
+        - name: redis
+          image: "{{ .Values.redis.image.repository }}:{{ .Values.redis.image.tag }}"
+          imagePullPolicy: {{ .Values.redis.image.pullPolicy }}
+          ports:
+            - containerPort: {{ .Values.redis.port }}
+---
+# Routing Manager (simulé)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "osc-ric.fullname" . }}-rtmgr
+  labels:
+    {{- include "osc-ric.labels" . | nindent 4 }}
+    component: rtmgr
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: {{ include "osc-ric.fullname" . }}-rtmgr
+  template:
+    metadata:
+      labels:
+        app: {{ include "osc-ric.fullname" . }}-rtmgr
+    spec:
+      containers:
+        - name: rtmgr
+          image: "{{ .Values.rtmgr.image.repository }}:{{ .Values.rtmgr.image.tag }}"
+          imagePullPolicy: {{ .Values.rtmgr.image.pullPolicy }}
+          ports:
+            - containerPort: {{ .Values.rtmgr.port.http }}
+---
+# E2 Termination
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "osc-ric.fullname" . }}-e2term
+  labels:
+    {{- include "osc-ric.labels" . | nindent 4 }}
+    component: e2term
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: {{ include "osc-ric.fullname" . }}-e2term
+  template:
+    metadata:
+      labels:
+        app: {{ include "osc-ric.fullname" . }}-e2term
+    spec:
+      containers:
+        - name: e2term
+          image: "{{ .Values.e2term.image.repository }}:{{ .Values.e2term.image.tag }}"
+          imagePullPolicy: {{ .Values.e2term.image.pullPolicy }}
+          ports:
+            - name: sctp
+              containerPort: {{ .Values.e2term.port.sctp }}
+              protocol: SCTP
+            - name: http
+              containerPort: {{ .Values.e2term.port.http }}
+          env:
+            - name: RMR_SEED_RT
+              value: "/opt/e2/router.txt"
+            - name: REDIS_SERVICE_HOST
+              value: "{{ include "osc-ric.fullname" . }}-redis"
+            - name: REDIS_SERVICE_PORT
+              value: "{{ .Values.redis.port }}"
+---
+# E2 Manager
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "osc-ric.fullname" . }}-e2mgr
+  labels:
+    {{- include "osc-ric.labels" . | nindent 4 }}
+    component: e2mgr
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: {{ include "osc-ric.fullname" . }}-e2mgr
+  template:
+    metadata:
+      labels:
+        app: {{ include "osc-ric.fullname" . }}-e2mgr
+    spec:
+      containers:
+        - name: e2mgr
+          image: "{{ .Values.e2mgr.image.repository }}:{{ .Values.e2mgr.image.tag }}"
+          imagePullPolicy: {{ .Values.e2mgr.image.pullPolicy }}
+          ports:
+            - containerPort: {{ .Values.e2mgr.port.http }}
+          env:
+            - name: REDIS_SERVICE_HOST
+              value: "{{ include "osc-ric.fullname" . }}-redis"
+            - name: REDIS_SERVICE_PORT
+              value: "{{ .Values.redis.port }}"
+            - name: E2TERM_SERVICE_HOST
+              value: "{{ include "osc-ric.fullname" . }}-e2term"
+---
+# Subscription Manager
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "osc-ric.fullname" . }}-submgr
+  labels:
+    {{- include "osc-ric.labels" . | nindent 4 }}
+    component: submgr
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: {{ include "osc-ric.fullname" . }}-submgr
+  template:
+    metadata:
+      labels:
+        app: {{ include "osc-ric.fullname" . }}-submgr
+    spec:
+      containers:
+        - name: submgr
+          image: "{{ .Values.submgr.image.repository }}:{{ .Values.submgr.image.tag }}"
+          imagePullPolicy: {{ .Values.submgr.image.pullPolicy }}
+          ports:
+            - containerPort: {{ .Values.submgr.port.http }}
+          env:
+            - name: RTMGR_SERVICE_HOST
+              value: "{{ include "osc-ric.fullname" . }}-rtmgr"

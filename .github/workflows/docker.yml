@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       images:
-        description: "Select which images to build (comma-separated: zmq, dpdk, uhd, srsue, telegraf, all)"
+        description: "Select which images to build (comma-separated: zmq, dpdk, uhd, srsue, telegraf, rl-xapp, all)"
         required: true
         default: "all"
 
@@ -40,6 +40,10 @@ jobs:
             DOCKERFILE: ./docker/Dockerfile.telegraf
             CONTEXT: ./docker
             KEY: telegraf
+          - NAME: rl-xapp
+            DOCKERFILE: ./docker/Dockerfile.rl-xapp
+            CONTEXT: ./docker
+            KEY: rl-xapp
 
     steps:
       - name: Checkout code

@@ -1,0 +1,60 @@
+# =========================
+# OSC Near-RT RIC values
+# =========================
+
+# E2 termination — port SCTP pour les gNBs
+e2term:
+  image:
+    repository: nexus3.o-ran-sc.org:10002/o-ran-sc/ric-plt-e2
+    tag: 6.0.0
+    pullPolicy: IfNotPresent
+  port:
+    sctp: 36421     # Interface E2 vers les gNBs
+    http: 8088      # REST API interne
+
+# E2 Manager
+e2mgr:
+  image:
+    repository: nexus3.o-ran-sc.org:10002/o-ran-sc/ric-plt-e2mgr
+    tag: 6.0.0
+    pullPolicy: IfNotPresent
+  port:
+    http: 3800
+
+# Routing Manager (simulé)
+rtmgr:
+  image:
+    repository: nexus3.o-ran-sc.org:10002/o-ran-sc/ric-plt-rtmgrsim
+    tag: 5.5.0
+    pullPolicy: IfNotPresent
+  port:
+    http: 4561
+
+# Subscription Manager
+submgr:
+  image:
+    repository: nexus3.o-ran-sc.org:10002/o-ran-sc/ric-plt-submgr
+    tag: 0.11.0
+    pullPolicy: IfNotPresent
+  port:
+    http: 8088
+
+# Application Manager
+appmgr:
+  image:
+    repository: nexus3.o-ran-sc.org:10002/o-ran-sc/ric-plt-appmgr
+    tag: 0.5.6
+    pullPolicy: IfNotPresent
+  port:
+    http: 8080
+
+# Redis — base de données partagée entre les composants RIC
+redis:
+  image:
+    repository: redis
+    tag: "6.2"
+    pullPolicy: IfNotPresent
+  port: 6379
+
+# IP du RIC exposée aux gNBs (à adapter selon le cluster)
+ricIp: 10.10.3.210

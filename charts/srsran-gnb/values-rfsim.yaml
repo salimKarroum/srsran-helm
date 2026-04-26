@@ -100,5 +100,14 @@ gnbConfig:
   remote_control:
     bind_addr: 0.0.0.0
     enabled: true
-
     port: 8001
+
+  # E2 agent — connexion au Near-RT RIC (OSC)
+  # Activer pour la boucle fermée RL via xApp
+  e2:
+    enable_du_e2: true
+    e2sm_kpm_enabled: true    # remonte les KPIs (débit, SINR, PRBs) au RIC
+    e2sm_rc_enabled: true     # reçoit les décisions PRB du xApp RL
+    addr: 10.10.3.210         # IP du Near-RT RIC (osc-ric e2term)
+    bind_addr: 10.10.3.231    # IP locale du gNB
+    port: 36421               # port SCTP E2 standard

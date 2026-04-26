@@ -1,0 +1,64 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "rl-xapp.fullname" . }}
+  labels:
+    {{- include "rl-xapp.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "rl-xapp.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "rl-xapp.selectorLabels" . | nindent 8 }}
+    spec:
+      containers:
+        - name: rl-xapp
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["python", "/app/xapp.py"]
+          env:
+            - name: RIC_HOST
+              value: "{{ .Values.ric.host }}"
+            - name: RIC_PORT
+              value: "{{ .Values.ric.port }}"
+            - name: SUBMGR_HOST
+              value: "{{ .Values.submgr.host }}"
+            - name: SUBMGR_PORT
+              value: "{{ .Values.submgr.port }}"
+            - name: CTRL_INTERVAL
+              value: "{{ .Values.controlLoopIntervalSec }}"
+            - name: TOTAL_TIMESTEPS
+              value: "{{ .Values.ppo.totalTimesteps }}"
+            - name: EMBB_TARGET_MBPS
+              value: "{{ .Values.slices.embb.targetThroughputMbps }}"
+            - name: URLLC_TARGET_MS
+              value: "{{ .Values.slices.urllc.targetLatencyMs }}"
+            - name: PPO_LR
+              value: "{{ .Values.ppo.learningRate }}"
+            - name: PPO_N_STEPS
+              value: "{{ .Values.ppo.nSteps }}"
+            - name: PPO_BATCH
+              value: "{{ .Values.ppo.batchSize }}"
+            - name: PPO_N_EPOCHS
+              value: "{{ .Values.ppo.nEpochs }}"
+            - name: PPO_GAMMA
+              value: "{{ .Values.ppo.gamma }}"
+            - name: PPO_CLIP
+              value: "{{ .Values.ppo.clipRange }}"
+          volumeMounts:
+            - name: xapp-code
+              mountPath: /app
+          resources:
+            requests:
+              cpu: {{ .Values.resources.requests.cpu | quote }}
+              memory: {{ .Values.resources.requests.memory | quote }}
+            limits:
+              cpu: {{ .Values.resources.limits.cpu | quote }}
+              memory: {{ .Values.resources.limits.memory | quote }}
+      volumes:
+        - name: xapp-code
+          configMap:
+            name: {{ include "rl-xapp.fullname" . }}-code

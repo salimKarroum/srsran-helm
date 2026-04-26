@@ -1,0 +1,76 @@
+---
+# Redis Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "osc-ric.fullname" . }}-redis
+  labels:
+    {{- include "osc-ric.labels" . | nindent 4 }}
+spec:
+  selector:
+    app: {{ include "osc-ric.fullname" . }}-redis
+  ports:
+    - port: {{ .Values.redis.port }}
+      targetPort: {{ .Values.redis.port }}
+---
+# Routing Manager Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "osc-ric.fullname" . }}-rtmgr
+  labels:
+    {{- include "osc-ric.labels" . | nindent 4 }}
+spec:
+  selector:
+    app: {{ include "osc-ric.fullname" . }}-rtmgr
+  ports:
+    - port: {{ .Values.rtmgr.port.http }}
+      targetPort: {{ .Values.rtmgr.port.http }}
+---
+# E2 Termination Service — exposé en NodePort pour les gNBs externes
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "osc-ric.fullname" . }}-e2term
+  labels:
+    {{- include "osc-ric.labels" . | nindent 4 }}
+spec:
+  type: NodePort
+  selector:
+    app: {{ include "osc-ric.fullname" . }}-e2term
+  ports:
+    - name: sctp
+      port: {{ .Values.e2term.port.sctp }}
+      targetPort: {{ .Values.e2term.port.sctp }}
+      protocol: SCTP
+    - name: http
+      port: {{ .Values.e2term.port.http }}
+      targetPort: {{ .Values.e2term.port.http }}
+---
+# E2 Manager Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "osc-ric.fullname" . }}-e2mgr
+  labels:
+    {{- include "osc-ric.labels" . | nindent 4 }}
+spec:
+  selector:
+    app: {{ include "osc-ric.fullname" . }}-e2mgr
+  ports:
+    - port: {{ .Values.e2mgr.port.http }}
+      targetPort: {{ .Values.e2mgr.port.http }}
+---
+# Subscription Manager Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "osc-ric.fullname" . }}-submgr
+  labels:
+    {{- include "osc-ric.labels" . | nindent 4 }}
+spec:
+  selector:
+    app: {{ include "osc-ric.fullname" . }}-submgr
+  ports:
+    - port: {{ .Values.submgr.port.http }}
+      targetPort: {{ .Values.submgr.port.http }}
