@@ -1,0 +1,35 @@
+---
+# Séquence de déploiement srsRAN complète
+# Ordre obligatoire : RIC → UEs → gNB → broker → Telegraf → xApp
+
+- name: Patch Helm charts
+  include_tasks: patch_charts.yml
+  when: rru == 'rfsim'
+
+# ── Near-RT RIC (OSC) ─────────────────────────────────────────────────────────
+# Doit être déployé AVANT le gNB pour que l'E2 agent trouve le RIC au boot
+- name: Deploy OSC Near-RT RIC
+  include_tasks: deploy_osc_ric.yml
+  when: ric_enabled | default(false)
+
+# ── RAN ───────────────────────────────────────────────────────────────────────
+- name: Deploy srsRAN UEs (broker must be ready before gNB)
+  include_tasks: deploy_srsues.yml
+  when: rru == 'rfsim'
+
+- name: Deploy srsRAN gNB
+  include_tasks: deploy_gnb.yml
+
+- name: Start GNU Radio broker (after gNB is ready)
+  include_tasks: start_broker.yml
+  when: rru == 'rfsim'
+
+# ── Monitoring ────────────────────────────────────────────────────────────────
+- name: Deploy Telegraf
+  include_tasks: deploy_telegraf.yml
+
+# ── RL xApp ───────────────────────────────────────────────────────────────────
+# Doit être déployé APRÈS le gNB (le xApp a besoin d'un nœud E2 connecté)
+- name: Deploy RL xApp (PPO closed-loop PRB slicing)
+  include_tasks: deploy_rl_xapp.yml
+  when: ric_enabled | default(false)

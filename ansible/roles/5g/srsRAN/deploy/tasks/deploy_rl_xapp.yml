@@ -1,0 +1,49 @@
+---
+# Déploie le xApp RL (PPO) après que le gNB soit connecté au RIC
+# Le xApp se connecte au RIC via REST, pas directement au gNB
+
+- name: Load srsRAN common variables
+  include_vars: "{{ role_path }}/common/defaults/main.yml"
+
+- name: Remove existing rl-xapp release if present
+  kubernetes.core.helm:
+    name: rl-xapp
+    namespace: "{{ ran_ns }}"
+    state: absent
+    wait: true
+  ignore_errors: true
+
+- name: Wait for gNB E2 agent to connect to RIC
+  pause:
+    seconds: 15
+    prompt: "Waiting for gNB E2 agent to establish connection with Near-RT RIC..."
+
+- name: Deploy RL xApp (PPO closed-loop PRB slicing)
+  kubernetes.core.helm:
+    name: rl-xapp
+    chart_ref: "{{ repo_dest_abs }}/charts/rl-xapp"
+    namespace: "{{ ran_ns }}"
+    create_namespace: true
+    values:
+      ric:
+        host: "osc-ric-e2mgr"
+        port: "{{ ric_e2mgr_port }}"
+      submgr:
+        host: "osc-ric-submgr"
+        port: "{{ ric_submgr_port }}"
+      controlLoopIntervalSec: "{{ xapp_ctrl_interval }}"
+      ppo:
+        totalTimesteps: "{{ xapp_ppo_timesteps }}"
+        learningRate: "{{ xapp_ppo_lr }}"
+      slices:
+        embb:
+          targetThroughputMbps: "{{ xapp_embb_target_mbps }}"
+        urllc:
+          targetLatencyMs: "{{ xapp_urllc_target_ms }}"
+    wait: false
+    timeout: "120s"
+  register: xapp_deploy
+
+- name: Show RL xApp deployment status
+  debug:
+    msg: "RL xApp deployed. PPO closed-loop slicing is now active ({{ xapp_ppo_timesteps }} timesteps)."

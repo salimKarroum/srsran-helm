@@ -1,0 +1,43 @@
+---
+# Déploie le Near-RT RIC (OSC) avant le gNB
+# Le gNB doit trouver le RIC au démarrage pour établir la connexion E2
+
+- name: Load srsRAN common variables
+  include_vars: "{{ role_path }}/common/defaults/main.yml"
+
+- name: Remove existing osc-ric release if present
+  kubernetes.core.helm:
+    name: osc-ric
+    namespace: "{{ ran_ns }}"
+    state: absent
+    wait: true
+  ignore_errors: true
+
+- name: Deploy OSC Near-RT RIC
+  kubernetes.core.helm:
+    name: osc-ric
+    chart_ref: "{{ repo_dest_abs }}/charts/osc-ric"
+    namespace: "{{ ran_ns }}"
+    create_namespace: true
+    values:
+      ricIp: "{{ ric_ip }}"
+      e2term:
+        port:
+          sctp: "{{ ric_e2_port }}"
+    wait: true
+    atomic: true
+    timeout: "300s"
+  register: ric_deploy
+
+- name: Wait for RIC E2 termination to be ready
+  kubernetes.core.k8s_info:
+    kind: Pod
+    namespace: "{{ ran_ns }}"
+    label_selectors:
+      - "component=e2term"
+  register: e2term_pods
+  until: >
+    e2term_pods.resources | length > 0 and
+    e2term_pods.resources[0].status.phase == 'Running'
+  retries: 30
+  delay: 10
