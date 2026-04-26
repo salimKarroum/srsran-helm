@@ -48,6 +48,9 @@ spec:
               value: "{{ .Values.ppo.gamma }}"
             - name: PPO_CLIP
               value: "{{ .Values.ppo.clipRange }}"
+            # Le xApp lit les KPIs depuis le sidecar kpm-adapter (localhost)
+            - name: KPM_ADAPTER_URL
+              value: "http://localhost:{{ .Values.kpmAdapter.restPort }}"
           volumeMounts:
             - name: xapp-code
               mountPath: /app
@@ -58,6 +61,36 @@ spec:
             limits:
               cpu: {{ .Values.resources.limits.cpu | quote }}
               memory: {{ .Values.resources.limits.memory | quote }}
+
+        # ── Sidecar KPM Adapter ──────────────────────────────────────────────
+        # Lit les métriques srsRAN (WebSocket :8001) et les expose en REST :8080
+        - name: kpm-adapter
+          image: "{{ .Values.kpmAdapter.image.repository }}:{{ .Values.kpmAdapter.image.tag }}"
+          imagePullPolicy: {{ .Values.kpmAdapter.image.pullPolicy }}
+          env:
+            - name: WS_URL
+              value: "{{ .Values.kpmAdapter.wsUrl }}"
+            - name: REST_PORT
+              value: "{{ .Values.kpmAdapter.restPort }}"
+            - name: SLICE_MAP
+              value: "{{ .Values.kpmAdapter.sliceMap }}"
+          ports:
+            - containerPort: {{ .Values.kpmAdapter.restPort }}
+              name: kpm-rest
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: {{ .Values.kpmAdapter.restPort }}
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: {{ .Values.kpmAdapter.resources.requests.cpu | quote }}
+              memory: {{ .Values.kpmAdapter.resources.requests.memory | quote }}
+            limits:
+              cpu: {{ .Values.kpmAdapter.resources.limits.cpu | quote }}
+              memory: {{ .Values.kpmAdapter.resources.limits.memory | quote }}
+
       volumes:
         - name: xapp-code
           configMap:

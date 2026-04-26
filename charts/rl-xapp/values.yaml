@@ -47,11 +47,24 @@ ppo:
 # Intervalle de la boucle de contrôle (en secondes)
 controlLoopIntervalSec: 0.1
 
-# Métriques collectées via E2SM-KPM
-kpmMetrics:
-  - "DRB.UEThpDl"           # débit DL par UE
-  - "RRU.PrbUsedDl"         # PRBs utilisés DL
-  - "L1M.RS-SINR.Wideband"  # SINR par UE
+# KPM Adapter — sidecar qui lit les métriques srsRAN et les expose en REST
+kpmAdapter:
+  image:
+    repository: ghcr.io/salimkarroum/kpm-adapter
+    tag: v1.0
+    pullPolicy: IfNotPresent
+  # URL WebSocket du gNB (service Kubernetes exposant le port 8001)
+  wsUrl: "srsran-gnb-metrics:8001"
+  restPort: 8080
+  # Mapping slice : "sst:sd" -> nom
+  sliceMap: '{"1:000001":"embb","1:000002":"urllc","1:000003":"mmtc"}'
+  resources:
+    requests:
+      cpu: "50m"
+      memory: "64Mi"
+    limits:
+      cpu: "200m"
+      memory: "128Mi"
 
 resources:
   requests:

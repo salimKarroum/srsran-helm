@@ -1,0 +1,21 @@
+# =========================
+# KPM Adapter Dockerfile
+# Lit les métriques srsRAN via WebSocket et expose une REST API pour le xApp RL
+# =========================
+
+FROM python:3.11-slim
+
+ENV PYTHONUNBUFFERED=1
+
+RUN pip install --no-cache-dir \
+    websocket-client==1.8.0 \
+    requests==2.31.0
+
+WORKDIR /app
+COPY resources/kpm_adapter.py /app/kpm_adapter.py
+
+ENV WS_URL="srsran-gnb-metrics:8001"
+ENV REST_PORT="8080"
+ENV TOTAL_PRB="106"
+
+CMD ["python", "/app/kpm_adapter.py"]

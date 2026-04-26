@@ -1,0 +1,17 @@
+---
+# Expose le port 8001 du gNB (WebSocket métriques + remote_control)
+# Le kpm-adapter s'y connecte via ws://srsran-gnb-metrics:8001
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "srsran-gnb.fullname" . }}-metrics
+  labels:
+    {{- include "srsran-gnb.labels" . | nindent 4 }}
+spec:
+  selector:
+    {{- include "srsran-gnb.selectorLabels" . | nindent 4 }}
+  ports:
+    - name: metrics-ws
+      port: 8001
+      targetPort: 8001
+      protocol: TCP
