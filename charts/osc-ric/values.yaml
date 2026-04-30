@@ -21,10 +21,10 @@ e2mgr:
   port:
     http: 3800
 
-# Routing Manager (simulé)
+# Routing Manager
 rtmgr:
   image:
-    repository: nexus3.o-ran-sc.org:10002/o-ran-sc/ric-plt-rtmgrsim
+    repository: nexus3.o-ran-sc.org:10002/o-ran-sc/ric-plt-rtmgr
     tag: 5.5.0
     pullPolicy: IfNotPresent
   port:
@@ -34,7 +34,7 @@ rtmgr:
 submgr:
   image:
     repository: nexus3.o-ran-sc.org:10002/o-ran-sc/ric-plt-submgr
-    tag: 0.11.0
+    tag: 0.9.5
     pullPolicy: IfNotPresent
   port:
     http: 8088
