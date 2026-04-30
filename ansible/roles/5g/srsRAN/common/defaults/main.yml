@@ -5,7 +5,7 @@
 # =============================================================================
 
 repo_url: "https://github.com/salimKarroum/srsran-helm.git"
-version: "main"
+version: "claude/explain-code-A163w"
 ran_ns: "{{ core }}"
 repo_dest: "~/srsran-helm"
 repo_dest_abs: "{{ ansible_env.HOME }}/srsran-helm"
