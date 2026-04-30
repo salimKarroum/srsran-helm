@@ -6,8 +6,8 @@
 e2term:
   image:
     repository: nexus3.o-ran-sc.org:10002/o-ran-sc/ric-plt-e2
-    tag: 5.5.0
-    # 6.0.0 segfaults; 5.5.0 works with SCTP loaded
+    tag: 5.4.9
+    pullPolicy: IfNotPresent
     pullPolicy: IfNotPresent
   port:
     sctp: 36421
@@ -26,7 +26,7 @@ e2mgr:
 rtmgr:
   image:
     repository: nexus3.o-ran-sc.org:10002/o-ran-sc/ric-plt-rtmgr
-    tag: 0.9.5
+    tag: 0.9.1
     pullPolicy: IfNotPresent
   port:
     http: 4561

@@ -71,6 +71,9 @@ spec:
         - name: e2term
           image: "{{ .Values.e2term.image.repository }}:{{ .Values.e2term.image.tag }}"
           imagePullPolicy: {{ .Values.e2term.image.pullPolicy }}
+          securityContext:
+            capabilities:
+              add: ["NET_ADMIN", "IPC_LOCK"]
           ports:
             - name: sctp
               containerPort: {{ .Values.e2term.port.sctp }}
