@@ -5,7 +5,7 @@
 #              r_slice = max(-1, thr_reçu/thr_cible - 1)
 
 - name: Load srsRAN common variables
-  include_vars: "{{ role_path }}/common/defaults/main.yml"
+  include_vars: "{{ role_path }}/../common/defaults/main.yml"
 
 - name: Remove existing rl-xapp release if present
   kubernetes.core.helm:

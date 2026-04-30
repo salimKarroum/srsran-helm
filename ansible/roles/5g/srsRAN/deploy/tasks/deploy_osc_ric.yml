@@ -3,7 +3,7 @@
 # Le gNB doit trouver le RIC au démarrage pour établir la connexion E2
 
 - name: Load srsRAN common variables
-  include_vars: "{{ role_path }}/common/defaults/main.yml"
+  include_vars: "{{ role_path }}/../common/defaults/main.yml"
 
 - name: Remove existing osc-ric release if present
   kubernetes.core.helm:
