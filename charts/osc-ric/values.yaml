@@ -6,17 +6,17 @@
 e2term:
   image:
     repository: nexus3.o-ran-sc.org:10002/o-ran-sc/ric-plt-e2
-    tag: 6.0.0
+    tag: 5.5.0
     pullPolicy: IfNotPresent
   port:
-    sctp: 36421     # Interface E2 vers les gNBs
-    http: 8088      # REST API interne
+    sctp: 36421
+    http: 8088
 
 # E2 Manager
 e2mgr:
   image:
     repository: nexus3.o-ran-sc.org:10002/o-ran-sc/ric-plt-e2mgr
-    tag: 6.0.0
+    tag: 5.5.0
     pullPolicy: IfNotPresent
   port:
     http: 3800

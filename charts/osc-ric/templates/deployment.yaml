@@ -80,9 +80,9 @@ spec:
           env:
             - name: RMR_SEED_RT
               value: "/opt/e2/router.txt"
-            - name: REDIS_SERVICE_HOST
+            - name: DBAAS_SERVICE_HOST
               value: "{{ include "osc-ric.fullname" . }}-redis"
-            - name: REDIS_SERVICE_PORT
+            - name: DBAAS_SERVICE_PORT
               value: "{{ .Values.redis.port }}"
 ---
 # E2 Manager
@@ -110,12 +110,16 @@ spec:
           ports:
             - containerPort: {{ .Values.e2mgr.port.http }}
           env:
-            - name: REDIS_SERVICE_HOST
+            - name: DBAAS_SERVICE_HOST
               value: "{{ include "osc-ric.fullname" . }}-redis"
-            - name: REDIS_SERVICE_PORT
+            - name: DBAAS_SERVICE_PORT
               value: "{{ .Values.redis.port }}"
             - name: E2TERM_SERVICE_HOST
               value: "{{ include "osc-ric.fullname" . }}-e2term"
+            - name: RTMGR_SERVICE_HOST
+              value: "{{ include "osc-ric.fullname" . }}-rtmgr"
+            - name: RTMGR_SERVICE_PORT
+              value: "{{ .Values.rtmgr.port.http }}"
 ---
 # Subscription Manager
 apiVersion: apps/v1
