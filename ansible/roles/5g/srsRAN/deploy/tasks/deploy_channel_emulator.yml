@@ -1,0 +1,42 @@
+---
+# Déploie le GNU Radio Channel Emulator entre gNB et UEs
+# Doit être lancé APRÈS le gNB et AVANT les UEs (les sockets ZMQ doivent être prêts)
+# Conforme papier REAL : FSPL + single-tap multipath + AWGN + Doppler
+# Distance aléatoire d ∈ [0.5 km, 2 km], reset toutes les 5s
+
+- name: Load srsRAN common variables
+  include_vars: "{{ role_path }}/common/defaults/main.yml"
+
+- name: Remove existing channel-emulator release if present
+  kubernetes.core.helm:
+    name: channel-emulator
+    namespace: "{{ ran_ns }}"
+    state: absent
+    wait: true
+  ignore_errors: true
+
+- name: Deploy GNU Radio Channel Emulator
+  kubernetes.core.helm:
+    name: channel-emulator
+    chart_ref: "{{ repo_dest_abs }}/charts/channel-emulator"
+    namespace: "{{ ran_ns }}"
+    create_namespace: true
+    values:
+      gnb:
+        zmqTxAddr: "tcp://{{ srsran_network.n3.gnb_ip }}:2000"
+        zmqRxAddr: "tcp://{{ srsran_network.n3.gnb_ip }}:2001"
+      channel:
+        distanceMinKm: "{{ channel_distance_min_km }}"
+        distanceMaxKm: "{{ channel_distance_max_km }}"
+        dopplerMaxHz:  "{{ channel_doppler_max_hz }}"
+        noiseFigureDb: "{{ channel_noise_figure_db }}"
+    wait: true
+    atomic: true
+    timeout: "120s"
+  register: channel_deploy
+
+- name: Channel emulator deployed
+  debug:
+    msg: >
+      Channel emulator actif : FSPL + AWGN + Doppler
+      d∈[{{ channel_distance_min_km }},{{ channel_distance_max_km }}]km

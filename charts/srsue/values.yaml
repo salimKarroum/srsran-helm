@@ -1,5 +1,6 @@
 # =========================
-# srsUE values file for basic ZMQ setup.
+# srsUE values — 12 UEs (4 par slice) conforme papier REAL
+# Slices : eMBB (SST1:SD000001), URLLC (SST1:SD000002), mMTC (SST1:SD000003)
 # =========================
 
 image:
@@ -7,5 +8,94 @@ image:
   tag: v1.0
   pullPolicy: IfNotPresent
 
-ueIp: 10.10.3.232
 gnbIp: 10.10.3.231
+
+# 12 UEs — 4 par slice
+# Chaque UE a une IP, un port ZMQ et un IMSI uniques
+ues:
+  # ── Slice eMBB (SST:1, SD:000001) ────────────────────────────────────────
+  - id: 0
+    ip: 10.10.3.232
+    zmqTxPort: 2000
+    zmqRxPort: 2001
+    imsi: "001010000000001"
+    slice: { sst: 1, sd: "000001" }
+
+  - id: 1
+    ip: 10.10.3.233
+    zmqTxPort: 2002
+    zmqRxPort: 2003
+    imsi: "001010000000002"
+    slice: { sst: 1, sd: "000001" }
+
+  - id: 2
+    ip: 10.10.3.234
+    zmqTxPort: 2004
+    zmqRxPort: 2005
+    imsi: "001010000000003"
+    slice: { sst: 1, sd: "000001" }
+
+  - id: 3
+    ip: 10.10.3.235
+    zmqTxPort: 2006
+    zmqRxPort: 2007
+    imsi: "001010000000004"
+    slice: { sst: 1, sd: "000001" }
+
+  # ── Slice URLLC (SST:1, SD:000002) ───────────────────────────────────────
+  - id: 4
+    ip: 10.10.3.236
+    zmqTxPort: 2008
+    zmqRxPort: 2009
+    imsi: "001010000000005"
+    slice: { sst: 1, sd: "000002" }
+
+  - id: 5
+    ip: 10.10.3.237
+    zmqTxPort: 2010
+    zmqRxPort: 2011
+    imsi: "001010000000006"
+    slice: { sst: 1, sd: "000002" }
+
+  - id: 6
+    ip: 10.10.3.238
+    zmqTxPort: 2012
+    zmqRxPort: 2013
+    imsi: "001010000000007"
+    slice: { sst: 1, sd: "000002" }
+
+  - id: 7
+    ip: 10.10.3.239
+    zmqTxPort: 2014
+    zmqRxPort: 2015
+    imsi: "001010000000008"
+    slice: { sst: 1, sd: "000002" }
+
+  # ── Slice mMTC (SST:1, SD:000003) ────────────────────────────────────────
+  - id: 8
+    ip: 10.10.3.240
+    zmqTxPort: 2016
+    zmqRxPort: 2017
+    imsi: "001010000000009"
+    slice: { sst: 1, sd: "000003" }
+
+  - id: 9
+    ip: 10.10.3.241
+    zmqTxPort: 2018
+    zmqRxPort: 2019
+    imsi: "001010000000010"
+    slice: { sst: 1, sd: "000003" }
+
+  - id: 10
+    ip: 10.10.3.242
+    zmqTxPort: 2020
+    zmqRxPort: 2021
+    imsi: "001010000000011"
+    slice: { sst: 1, sd: "000003" }
+
+  - id: 11
+    ip: 10.10.3.243
+    zmqTxPort: 2022
+    zmqRxPort: 2023
+    imsi: "001010000000012"
+    slice: { sst: 1, sd: "000003" }

@@ -7,142 +7,157 @@ metadata:
 data:
   xapp.py: |
     """
-    RL xApp - Closed-loop PRB slicing via O-RAN E2 interface.
-    Algorithme : PPO (Proximal Policy Optimization) via stable-baselines3.
-    Slices : eMBB, URLLC, mMTC
+    RL xApp — Closed-loop PRB slicing conforme au papier REAL (arXiv:2502.00715).
 
-    Flux de données :
-      srsRAN :8001 (WebSocket JSON)
-        → kpm-adapter sidecar (agrège par slice)
-        → REST localhost:8080/v1/nodeb/{id}/kpm
-        → xApp PPO (observe → décide → E2SM-RC → gNB)
+    Algorithmes : PPO ou DQN (stable-baselines3), sélectionnable via RL_ALGO.
+    Slices      : eMBB (4 UEs), URLLC (4 UEs), mMTC (4 UEs) = 12 UEs total.
+    Interface   : E2SM-KPM (sampling 500ms) + E2SM-RC (quota PRBs par slice).
+    Récompense  : R = α_eMBB·r_eMBB + α_URLLC·r_URLLC + α_mMTC·r_mMTC
+                  r_slice = max(-1, thr_reçu/thr_cible - 1)  ∈ [-1, 0]
     """
-    import os
-    import time
-    import json
-    import logging
-    import requests
+    import os, time, json, logging, requests
     import numpy as np
     import gymnasium as gym
     from gymnasium import spaces
-    from stable_baselines3 import PPO
+    from stable_baselines3 import PPO, DQN
     from stable_baselines3.common.env_checker import check_env
 
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    logging.basicConfig(level=logging.INFO,
+                        format="%(asctime)s %(levelname)s %(message)s")
     log = logging.getLogger("rl-xapp")
 
-    # ── Configuration ────────────────────────────────────────────────────────────
+    # ── Configuration ────────────────────────────────────────────────────────
     RIC_HOST        = os.getenv("RIC_HOST",        "osc-ric-e2mgr")
     RIC_PORT        = os.getenv("RIC_PORT",        "3800")
     SUBMGR_HOST     = os.getenv("SUBMGR_HOST",     "osc-ric-submgr")
     SUBMGR_PORT     = os.getenv("SUBMGR_PORT",     "8088")
-    # URL du sidecar kpm-adapter (localhost car même pod)
     KPM_ADAPTER_URL = os.getenv("KPM_ADAPTER_URL", "http://localhost:8080")
-    CTRL_INTERVAL   = float(os.getenv("CTRL_INTERVAL",   "0.1"))
-    TOTAL_TIMESTEPS = int(os.getenv("TOTAL_TIMESTEPS",   "1000000"))
+    TOTAL_TIMESTEPS = int(os.getenv("TOTAL_TIMESTEPS", "1000000"))
 
+    # Algorithme RL : "PPO" ou "DQN"
+    RL_ALGO = os.getenv("RL_ALGO", "PPO").upper()
+
+    # Sampling KPM — papier REAL utilise 500ms
+    KPM_SAMPLE_MS = int(os.getenv("KPM_SAMPLE_MS", "500"))
+
+    # Débit cible par slice (Mbps)
+    EMBB_TARGET  = float(os.getenv("EMBB_TARGET_MBPS",  "50"))
+    URLLC_TARGET = float(os.getenv("URLLC_TARGET_MBPS", "20"))
+    MMTC_TARGET  = float(os.getenv("MMTC_TARGET_MBPS",   "5"))
+
+    # Poids α par slice — papier : α_URLLC > α_eMBB ≥ α_mMTC
+    ALPHA_EMBB  = float(os.getenv("ALPHA_EMBB",  "0.3"))
+    ALPHA_URLLC = float(os.getenv("ALPHA_URLLC", "0.5"))
+    ALPHA_MMTC  = float(os.getenv("ALPHA_MMTC",  "0.2"))
+
+    TOTAL_PRB = int(os.getenv("TOTAL_PRB", "106"))
+    E2MGR_URL = f"http://{RIC_HOST}:{RIC_PORT}"
     SUBMGR_URL = f"http://{SUBMGR_HOST}:{SUBMGR_PORT}"
-    E2MGR_URL  = f"http://{RIC_HOST}:{RIC_PORT}"
 
-    TOTAL_PRB = 106
-    N_SLICES  = 3
+    # ── Fonction de récompense (papier REAL, section IV-B) ───────────────────
+    def slice_reward(thr_received: float, thr_target: float) -> float:
+        """
+        r_slice = max(-1,  thr_received / thr_target  - 1)
+        • thr_received >= thr_target  →  r = 0   (objectif atteint)
+        • thr_received = 0            →  r = -1  (plancher)
+        Résultat dans [-1, 0] → évite gradients explosifs.
+        """
+        return float(max(-1.0, thr_received / max(thr_target, 1e-6) - 1.0))
 
-    EMBB_TARGET_MBPS = float(os.getenv("EMBB_TARGET_MBPS", "50"))
-    URLLC_TARGET_MS  = float(os.getenv("URLLC_TARGET_MS",  "5"))
+    def total_reward(thr: np.ndarray) -> float:
+        """R = α_eMBB·r_eMBB + α_URLLC·r_URLLC + α_mMTC·r_mMTC"""
+        r_embb  = slice_reward(thr[0], EMBB_TARGET)
+        r_urllc = slice_reward(thr[1], URLLC_TARGET)
+        r_mmtc  = slice_reward(thr[2], MMTC_TARGET)
+        return ALPHA_EMBB * r_embb + ALPHA_URLLC * r_urllc + ALPHA_MMTC * r_mmtc
 
-    # ── Environnement Gymnasium ──────────────────────────────────────────────────
+    # ── Environnement Gymnasium ──────────────────────────────────────────────
     class PRBSlicingEnv(gym.Env):
         """
-        Observation (9 valeurs normalisées) :
-          [dl_mbps_embb,  dl_mbps_urllc,  dl_mbps_mmtc,
-           sinr_db_embb,  sinr_db_urllc,  sinr_db_mmtc,
-           prb_use_embb,  prb_use_urllc,  prb_use_mmtc]
+        Observation (6 valeurs) :
+          [thr_embb/200, thr_urllc/200, thr_mmtc/200,
+           prb_embb/106, prb_urllc/106, prb_mmtc/106]
 
-        Action (Discrete 7) — transfert de 10 PRBs entre slices :
-          0=no-op  1=eMBB→URLLC  2=URLLC→eMBB
-          3=eMBB→mMTC  4=mMTC→eMBB  5=URLLC→mMTC  6=mMTC→URLLC
+        Action (Discrete 7) — transfert de PRB_STEP PRBs entre slices :
+          0=no-op
+          1=eMBB→URLLC   2=URLLC→eMBB
+          3=eMBB→mMTC    4=mMTC→eMBB
+          5=URLLC→mMTC   6=mMTC→URLLC
+
+        PRB_STEP = 10 PRBs par action (~10% de la bande 20 MHz).
+        Minimum par slice = 5 PRBs.
         """
         metadata = {"render_modes": []}
 
+        PRB_STEP = 10
+        PRB_MIN  = 5
+
         def __init__(self):
             super().__init__()
-            self.observation_space = spaces.Box(low=0.0, high=1.0, shape=(9,), dtype=np.float32)
-            self.action_space      = spaces.Discrete(7)
-            self.prb  = np.array([42.0, 42.0, 22.0], dtype=np.float32)
-            self._gnb_id  = None
-            self._sub_id  = None
+            self.observation_space = spaces.Box(
+                low=0.0, high=1.0, shape=(6,), dtype=np.float32)
+            self.action_space = spaces.Discrete(7)
+            # Allocation initiale : 40/40/26 PRBs
+            self.prb = np.array([40.0, 40.0, 26.0], dtype=np.float32)
+            self._gnb_id = None
 
-        # ── KPM : lecture depuis le sidecar ──────────────────────────────────
-        def _wait_for_adapter(self, retries=30, delay=2):
-            """Attend que le kpm-adapter soit prêt."""
+        # ── KPM adapter ──────────────────────────────────────────────────────
+        def _wait_adapter(self, retries=30, delay=3):
             for i in range(retries):
                 try:
-                    r = requests.get(f"{KPM_ADAPTER_URL}/health", timeout=2)
-                    if r.status_code == 200:
+                    if requests.get(f"{KPM_ADAPTER_URL}/health",
+                                    timeout=2).status_code == 200:
                         log.info("kpm-adapter prêt.")
-                        return True
+                        return
                 except Exception:
                     pass
-                log.info(f"Attente kpm-adapter ({i+1}/{retries})...")
+                log.info(f"Attente kpm-adapter {i+1}/{retries}...")
                 time.sleep(delay)
-            return False
 
         def _fetch_kpis(self):
             """
-            Lit les métriques agrégées par slice depuis le kpm-adapter.
-            Retourne (thr[3], sinr[3], prb_usage[3]) en float32.
+            Lit débit DL par slice depuis le kpm-adapter.
+            Bloque KPM_SAMPLE_MS ms (500ms par défaut, conforme papier).
             """
+            time.sleep(KPM_SAMPLE_MS / 1000.0)
             gnb = self._gnb_id or "gnb"
             try:
                 r = requests.get(
-                    f"{KPM_ADAPTER_URL}/v1/nodeb/{gnb}/kpm",
-                    timeout=3
-                )
+                    f"{KPM_ADAPTER_URL}/v1/nodeb/{gnb}/kpm", timeout=3)
                 if r.status_code != 200:
                     raise ValueError(f"HTTP {r.status_code}")
                 d = r.json()
-                thr = np.array([
+                return np.array([
                     d.get("embb_dl_mbps",  0.0),
                     d.get("urllc_dl_mbps", 0.0),
                     d.get("mmtc_dl_mbps",  0.0),
                 ], dtype=np.float32)
-                sinr = np.array([
-                    d.get("embb_sinr_db",  0.0),
-                    d.get("urllc_sinr_db", 0.0),
-                    d.get("mmtc_sinr_db",  0.0),
-                ], dtype=np.float32)
-                prb = np.array([
-                    d.get("embb_prb_usage",  self.prb[0] / TOTAL_PRB),
-                    d.get("urllc_prb_usage", self.prb[1] / TOTAL_PRB),
-                    d.get("mmtc_prb_usage",  self.prb[2] / TOTAL_PRB),
-                ], dtype=np.float32)
-                return thr, sinr, prb
             except Exception as e:
-                log.warning(f"_fetch_kpis échoué : {e}")
-                return (np.zeros(3, dtype=np.float32),
-                        np.zeros(3, dtype=np.float32),
-                        (self.prb / TOTAL_PRB).astype(np.float32))
+                log.warning(f"_fetch_kpis: {e}")
+                return np.zeros(3, dtype=np.float32)
 
-        # ── E2 : connexion RIC et contrôle RC ────────────────────────────────
-        def _get_gnb_list(self):
+        # ── RIC ──────────────────────────────────────────────────────────────
+        def _get_gnb(self):
             try:
                 r = requests.get(f"{E2MGR_URL}/v1/nodeb/states", timeout=5)
-                return [n["inventoryName"]
-                        for n in r.json()
-                        if n.get("connectionStatus") == "CONNECTED"]
+                nodes = [n["inventoryName"] for n in r.json()
+                         if n.get("connectionStatus") == "CONNECTED"]
+                return nodes[0] if nodes else None
             except Exception as e:
-                log.warning(f"_get_gnb_list : {e}")
-                return []
+                log.warning(f"_get_gnb: {e}")
+                return None
 
         def _subscribe_kpm(self, gnb_id):
+            """RIC Subscription Request — E2SM-KPM Style 4, période 500ms."""
             payload = {
                 "SubscriptionId": "",
-                "ClientEndpoint": {"Host": "rl-xapp", "HTTPPort": 8080, "RMRPort": 4560},
+                "ClientEndpoint": {
+                    "Host": "rl-xapp", "HTTPPort": 8080, "RMRPort": 4560},
                 "Meid": gnb_id,
                 "RANFunctionID": 2,
                 "SubscriptionDetails": [{
                     "RequestId": {"RequestorId": 1, "InstanceId": 0},
-                    "EventTriggers": [70],
+                    "EventTriggers": [KPM_SAMPLE_MS],
                     "ActionToBeSetupList": [{
                         "ActionId": 0,
                         "ActionType": "report",
@@ -157,135 +172,147 @@ data:
                 }]
             }
             try:
-                r = requests.post(f"{SUBMGR_URL}/ric/v1/subscriptions",
-                                  json=payload, timeout=5)
-                log.info(f"KPM subscription : {r.status_code}")
-                return r.json().get("SubscriptionId")
+                r = requests.post(
+                    f"{SUBMGR_URL}/ric/v1/subscriptions",
+                    json=payload, timeout=5)
+                log.info(f"KPM subscription: {r.status_code}")
             except Exception as e:
-                log.warning(f"_subscribe_kpm : {e}")
-                return None
+                log.warning(f"_subscribe_kpm: {e}")
 
-        def _send_rc_control(self, gnb_id, prb_alloc):
+        def _send_rc(self, prb_alloc):
+            """
+            RIC Control Request — E2SM-RC Style 2.
+            Envoie le quota PRBs par slice au gNB.
+            Distribution interne par slice :
+              1) Équitable entre les UEs de la slice.
+              2) PRBs restants → UEs avec plus forte perte de trajet.
+              (Le gNB gère la distribution interne via le scheduler.)
+            """
+            if not self._gnb_id:
+                return
             payload = {
                 "RanFunctionId": 3,
                 "RicControlAckRequest": "NO_ACK",
-                "RicControlHeader": {
-                    "ControlActionId": 1,
-                    "UEId": {"GNbUEId": {"AMFUENGAPId": 0, "GUAMI": {}}}
-                },
+                "RicControlHeader": {"ControlActionId": 1,
+                                     "UEId": {"GNbUEId": {
+                                         "AMFUENGAPId": 0, "GUAMI": {}}}},
                 "RicControlMessage": {
                     "StyleType": 2,
                     "RicControlMessageFormat2": {
                         "SlicePRBQuota": [
-                            {"SNSSAI": {"SST": 1, "SD": "000001"}, "PRBQuota": int(prb_alloc[0])},
-                            {"SNSSAI": {"SST": 1, "SD": "000002"}, "PRBQuota": int(prb_alloc[1])},
-                            {"SNSSAI": {"SST": 1, "SD": "000003"}, "PRBQuota": int(prb_alloc[2])},
+                            {"SNSSAI": {"SST": 1, "SD": "000001"},
+                             "PRBQuota": int(prb_alloc[0])},
+                            {"SNSSAI": {"SST": 1, "SD": "000002"},
+                             "PRBQuota": int(prb_alloc[1])},
+                            {"SNSSAI": {"SST": 1, "SD": "000003"},
+                             "PRBQuota": int(prb_alloc[2])},
                         ]
                     }
                 }
             }
             try:
-                requests.post(f"{E2MGR_URL}/v1/nodeb/{gnb_id}/rc-control",
-                              json=payload, timeout=5)
+                requests.post(
+                    f"{E2MGR_URL}/v1/nodeb/{self._gnb_id}/rc-control",
+                    json=payload, timeout=5)
             except Exception as e:
-                log.warning(f"_send_rc_control : {e}")
+                log.warning(f"_send_rc: {e}")
 
         # ── Gymnasium API ─────────────────────────────────────────────────────
         def reset(self, seed=None, options=None):
             super().reset(seed=seed)
-            self.prb = np.array([42.0, 42.0, 22.0], dtype=np.float32)
-            self._wait_for_adapter()
-            gnbs = self._get_gnb_list()
-            if gnbs:
-                self._gnb_id = gnbs[0]
-                self._sub_id = self._subscribe_kpm(self._gnb_id)
-                log.info(f"Connecté au gNB : {self._gnb_id}")
+            self.prb = np.array([40.0, 40.0, 26.0], dtype=np.float32)
+            self._wait_adapter()
+            self._gnb_id = self._get_gnb()
+            if self._gnb_id:
+                self._subscribe_kpm(self._gnb_id)
+                log.info(f"gNB connecté : {self._gnb_id}")
             else:
-                log.warning("Aucun gNB connecté au RIC — fonctionnement dégradé")
-            thr, sinr, prb_obs = self._fetch_kpis()
-            return self._build_obs(thr, sinr, prb_obs), {}
+                log.warning("Aucun gNB connecté au RIC")
+            return self._obs(np.zeros(3)), {}
 
         def step(self, action):
-            # 1. Appliquer l'action
-            delta, min_prb = 10.0, 5.0
+            # 1. Appliquer le transfert de PRBs
             transfers = [
-                (None, None), (0, 1), (1, 0),
-                (0, 2),       (2, 0), (1, 2), (2, 1),
+                None,
+                (0, 1), (1, 0),
+                (0, 2), (2, 0),
+                (1, 2), (2, 1),
             ]
-            src, dst = transfers[action]
-            if src is not None and self.prb[src] - delta >= min_prb:
-                self.prb[src] -= delta
-                self.prb[dst] += delta
+            t = transfers[action]
+            if t is not None:
+                src, dst = t
+                if self.prb[src] - self.PRB_STEP >= self.PRB_MIN:
+                    self.prb[src] -= self.PRB_STEP
+                    self.prb[dst] += self.PRB_STEP
 
-            # 2. Envoyer au gNB via E2SM-RC
-            if self._gnb_id:
-                self._send_rc_control(self._gnb_id, self.prb)
+            # 2. Envoyer quota PRBs au gNB
+            self._send_rc(self.prb)
 
-            # 3. Attendre la boucle de contrôle
-            time.sleep(CTRL_INTERVAL)
+            # 3. Attendre le prochain sample KPM (500ms)
+            thr = self._fetch_kpis()
 
-            # 4. Lire les KPIs réels depuis le kpm-adapter
-            thr, sinr, prb_obs = self._fetch_kpis()
-
-            # 5. Calculer la récompense
-            reward = self._compute_reward(thr, sinr)
-
-            # 6. Construire l'observation
-            obs = self._build_obs(thr, sinr, prb_obs)
+            # 4. Récompense conforme papier REAL
+            r = total_reward(thr)
 
             log.info(
-                f"act={action} PRB={self.prb.astype(int)} "
-                f"thr={thr.round(1)} sinr={sinr.round(1)} r={reward:.3f}"
+                f"algo={RL_ALGO} act={action} "
+                f"PRB={self.prb.astype(int).tolist()} "
+                f"thr={thr.round(2).tolist()} "
+                f"r={r:.4f} "
+                f"[r_embb={slice_reward(thr[0],EMBB_TARGET):.2f} "
+                f"r_urllc={slice_reward(thr[1],URLLC_TARGET):.2f} "
+                f"r_mmtc={slice_reward(thr[2],MMTC_TARGET):.2f}]"
             )
-            return obs, reward, False, False, {}
+            return self._obs(thr), r, False, False, {}
 
-        def _build_obs(self, thr, sinr, prb_obs):
-            return np.concatenate([
-                np.clip(thr   / 200.0, 0, 1),
-                np.clip(sinr  /  40.0, 0, 1),
-                np.clip(prb_obs,       0, 1),
-            ]).astype(np.float32)
+        def _obs(self, thr):
+            return np.array([
+                min(thr[0] / 200.0, 1.0),
+                min(thr[1] / 200.0, 1.0),
+                min(thr[2] / 200.0, 1.0),
+                self.prb[0] / TOTAL_PRB,
+                self.prb[1] / TOTAL_PRB,
+                self.prb[2] / TOTAL_PRB,
+            ], dtype=np.float32)
 
-        def _compute_reward(self, thr, sinr):
-            reward = 0.0
-            # eMBB : débit vs cible
-            if thr[0] >= EMBB_TARGET_MBPS:
-                reward += 1.0
-            else:
-                reward -= (EMBB_TARGET_MBPS - thr[0]) / EMBB_TARGET_MBPS
-            # URLLC : latence estimée (1/débit * constante)
-            est_lat = (1.0 / max(thr[1], 0.1)) * 10.0
-            if est_lat <= URLLC_TARGET_MS:
-                reward += 1.0
-            else:
-                reward -= min((est_lat - URLLC_TARGET_MS) / URLLC_TARGET_MS, 2.0)
-            # mMTC : bonus présence
-            if thr[2] > 0:
-                reward += 0.5
-            return float(reward)
-
-    # ── Main ─────────────────────────────────────────────────────────────────────
+    # ── Main ─────────────────────────────────────────────────────────────────
     def main():
-        log.info("Démarrage xApp RL (PPO)")
-        log.info(f"RIC={E2MGR_URL}  KPM-adapter={KPM_ADAPTER_URL}")
+        log.info(f"=== RL xApp démarrage (algo={RL_ALGO}) ===")
+        log.info(f"Targets: eMBB={EMBB_TARGET}Mbps  URLLC={URLLC_TARGET}Mbps  mMTC={MMTC_TARGET}Mbps")
+        log.info(f"Alpha:   eMBB={ALPHA_EMBB}  URLLC={ALPHA_URLLC}  mMTC={ALPHA_MMTC}")
+        log.info(f"KPM sample: {KPM_SAMPLE_MS}ms  |  Steps: {TOTAL_TIMESTEPS}")
 
         env = PRBSlicingEnv()
         check_env(env, warn=True)
 
-        model = PPO(
-            policy="MlpPolicy",
-            env=env,
-            learning_rate=float(os.getenv("PPO_LR",      "3e-4")),
-            n_steps=       int(os.getenv("PPO_N_STEPS",  "128")),
-            batch_size=    int(os.getenv("PPO_BATCH",     "64")),
-            n_epochs=      int(os.getenv("PPO_N_EPOCHS",  "10")),
-            gamma=         float(os.getenv("PPO_GAMMA",   "0.99")),
-            clip_range=    float(os.getenv("PPO_CLIP",    "0.2")),
-            verbose=1,
+        ppo_kwargs = dict(
+            policy="MlpPolicy", env=env, verbose=1,
+            learning_rate=float(os.getenv("PPO_LR",     "3e-4")),
+            n_steps=       int(os.getenv("PPO_N_STEPS", "128")),
+            batch_size=    int(os.getenv("PPO_BATCH",    "64")),
+            n_epochs=      int(os.getenv("PPO_N_EPOCHS", "10")),
+            gamma=         float(os.getenv("PPO_GAMMA",  "0.99")),
+            clip_range=    float(os.getenv("PPO_CLIP",   "0.2")),
         )
+        dqn_kwargs = dict(
+            policy="MlpPolicy", env=env, verbose=1,
+            learning_rate=     float(os.getenv("DQN_LR",          "1e-3")),
+            batch_size=        int(os.getenv("DQN_BATCH",          "64")),
+            gamma=             float(os.getenv("DQN_GAMMA",        "0.99")),
+            exploration_fraction=float(os.getenv("DQN_EXPL_FRAC", "0.1")),
+            exploration_final_eps=float(os.getenv("DQN_EXPL_EPS", "0.05")),
+            target_update_interval=int(os.getenv("DQN_TARGET_UPD","1000")),
+        )
+
+        if RL_ALGO == "DQN":
+            model = DQN(**dqn_kwargs)
+        else:
+            model = PPO(**ppo_kwargs)
+
         model.learn(total_timesteps=TOTAL_TIMESTEPS)
-        model.save("/tmp/ppo_rl_xapp")
-        log.info("Modèle sauvegardé : /tmp/ppo_rl_xapp.zip")
+        path = f"/tmp/{RL_ALGO.lower()}_rl_xapp"
+        model.save(path)
+        log.info(f"Modèle sauvegardé : {path}.zip")
 
     if __name__ == "__main__":
         main()

@@ -1,0 +1,37 @@
+# =========================
+# Channel Emulator values
+# Modèle canal : FSPL + single-tap multipath + AWGN + Doppler
+# Conforme papier REAL (arXiv:2502.00715), section III-B
+# =========================
+
+image:
+  repository: ghcr.io/salimkarroum/channel-emulator
+  tag: v1.0
+  pullPolicy: IfNotPresent
+
+# Adresses ZMQ du gNB (à faire correspondre avec values-rfsim.yaml)
+gnb:
+  zmqTxAddr: "tcp://srsran-gnb:2000"    # gNB envoie DL ici
+  zmqRxAddr: "tcp://srsran-gnb:2001"    # gNB reçoit UL ici
+
+# Adresses ZMQ des UEs
+ue:
+  zmqTxAddr: "tcp://srsue:2100"         # UE envoie UL ici
+  zmqRxAddr: "tcp://srsue:2101"         # UE reçoit DL ici
+
+# Paramètres canal — papier REAL
+channel:
+  distanceMinKm: 0.5         # distance minimale UE-gNB
+  distanceMaxKm: 2.0         # distance maximale UE-gNB
+  dopplerMaxHz: 50           # décalage Doppler max (mobilité piétonne ~3km/h)
+  noiseFigureDb: 7           # facteur de bruit (dB)
+  carrierFreqGhz: 1.8        # fréquence porteuse (bande 3 NR)
+  resetIntervalS: 5.0        # intervalle de changement de canal (mobilité)
+
+resources:
+  requests:
+    cpu: "200m"
+    memory: "256Mi"
+  limits:
+    cpu: "1000m"
+    memory: "512Mi"

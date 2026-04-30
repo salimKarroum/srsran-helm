@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       images:
-        description: "Select which images to build (comma-separated: zmq, dpdk, uhd, srsue, telegraf, rl-xapp, kpm-adapter, all)"
+        description: "Select which images to build (comma-separated: zmq, dpdk, uhd, srsue, telegraf, rl-xapp, kpm-adapter, channel-emulator, all)"
         required: true
         default: "all"
 
@@ -48,6 +48,10 @@ jobs:
             DOCKERFILE: ./docker/Dockerfile.kpm-adapter
             CONTEXT: ./docker
             KEY: kpm-adapter
+          - NAME: channel-emulator
+            DOCKERFILE: ./docker/Dockerfile.channel-emulator
+            CONTEXT: ./docker
+            KEY: channel-emulator
 
     steps:
       - name: Checkout code

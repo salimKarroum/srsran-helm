@@ -1,0 +1,6 @@
+apiVersion: v2
+name: channel-emulator
+description: GNU Radio channel emulator (FSPL + AWGN + Doppler) entre gNB et UEs — conforme papier REAL
+type: application
+version: 1.0.0
+appVersion: "1.0.0"

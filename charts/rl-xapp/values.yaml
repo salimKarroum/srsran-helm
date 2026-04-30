@@ -1,5 +1,5 @@
 # =========================
-# RL xApp values
+# RL xApp values — conforme papier REAL (arXiv:2502.00715)
 # =========================
 
 image:
@@ -7,56 +7,74 @@ image:
   tag: v1.0
   pullPolicy: IfNotPresent
 
-# Adresse du Near-RT RIC (E2 Manager REST API)
+# Algorithme RL : "PPO" ou "DQN" (papier compare les deux)
+rlAlgo: "PPO"
+
+# Adresse du Near-RT RIC
 ric:
-  host: osc-ric-e2mgr     # nom du service Kubernetes du RIC
+  host: osc-ric-e2mgr
   port: 3800
 
-# Adresse du Subscription Manager
 submgr:
   host: osc-ric-submgr
   port: 8088
 
-# Slices 5G et leurs objectifs QoS
+# Sampling KPM — 500ms conforme papier REAL
+kpmSampleMs: 500
+
+# Objectifs débit par slice (Mbps)
 slices:
   embb:
     sst: 1
     sd: "000001"
-    targetThroughputMbps: 50    # débit cible en Mbps
-    minPrb: 10                  # PRBs minimum alloués
+    targetThroughputMbps: 50
+    ueCount: 4          # 4 UEs par slice (papier REAL)
   urllc:
     sst: 1
     sd: "000002"
-    targetLatencyMs: 5          # latence cible en ms
-    minPrb: 10
+    targetThroughputMbps: 20
+    ueCount: 4
   mmtc:
     sst: 1
     sd: "000003"
-    minPrb: 5
+    targetThroughputMbps: 5
+    ueCount: 4
 
-# Paramètres PPO
+# Poids α par slice — papier REAL : α_URLLC > α_eMBB ≥ α_mMTC
+# Somme = 1.0
+alpha:
+  embb: 0.3
+  urllc: 0.5
+  mmtc: 0.2
+
+# Paramètres PPO (papier REAL)
 ppo:
   learningRate: 0.0003
-  nSteps: 128           # steps avant chaque mise à jour de politique
+  nSteps: 128
   batchSize: 64
   nEpochs: 10
-  gamma: 0.99           # facteur de discount
+  gamma: 0.99
   clipRange: 0.2
   totalTimesteps: 1000000
 
-# Intervalle de la boucle de contrôle (en secondes)
-controlLoopIntervalSec: 0.1
+# Paramètres DQN (papier REAL)
+dqn:
+  learningRate: 0.001
+  batchSize: 64
+  gamma: 0.99
+  explorationFraction: 0.1
+  explorationFinalEps: 0.05
+  targetUpdateInterval: 1000
+  totalTimesteps: 1000000
 
-# KPM Adapter — sidecar qui lit les métriques srsRAN et les expose en REST
+# KPM Adapter sidecar
 kpmAdapter:
   image:
     repository: ghcr.io/salimkarroum/kpm-adapter
     tag: v1.0
     pullPolicy: IfNotPresent
-  # URL WebSocket du gNB (service Kubernetes exposant le port 8001)
   wsUrl: "srsran-gnb-metrics:8001"
   restPort: 8080
-  # Mapping slice : "sst:sd" -> nom
   sliceMap: '{"1:000001":"embb","1:000002":"urllc","1:000003":"mmtc"}'
   resources:
     requests:
@@ -68,8 +86,8 @@ kpmAdapter:
 
 resources:
   requests:
-    cpu: "200m"
-    memory: "512Mi"
+    cpu: "500m"
+    memory: "1Gi"
   limits:
     cpu: "2000m"
     memory: "2Gi"

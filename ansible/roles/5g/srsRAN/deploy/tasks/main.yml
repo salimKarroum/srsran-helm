@@ -1,26 +1,33 @@
 ---
-# Séquence de déploiement srsRAN complète
-# Ordre obligatoire : RIC → UEs → gNB → broker → Telegraf → xApp
+# Séquence de déploiement srsRAN — conforme papier REAL (arXiv:2502.00715)
+# Ordre : RIC → gNB → channel-emulator → UEs → broker → Telegraf → xApp RL
 
 - name: Patch Helm charts
   include_tasks: patch_charts.yml
   when: rru == 'rfsim'
 
-# ── Near-RT RIC (OSC) ─────────────────────────────────────────────────────────
-# Doit être déployé AVANT le gNB pour que l'E2 agent trouve le RIC au boot
+# ── Near-RT RIC (OSC) — avant le gNB ─────────────────────────────────────────
 - name: Deploy OSC Near-RT RIC
   include_tasks: deploy_osc_ric.yml
   when: ric_enabled | default(false)
 
-# ── RAN ───────────────────────────────────────────────────────────────────────
-- name: Deploy srsRAN UEs (broker must be ready before gNB)
-  include_tasks: deploy_srsues.yml
-  when: rru == 'rfsim'
-
+# ── gNB ──────────────────────────────────────────────────────────────────────
 - name: Deploy srsRAN gNB
   include_tasks: deploy_gnb.yml
 
-- name: Start GNU Radio broker (after gNB is ready)
+# ── Channel Emulator GNU Radio — entre gNB et UEs ────────────────────────────
+# FSPL + single-tap multipath + AWGN + Doppler (papier REAL, section III-B)
+- name: Deploy GNU Radio Channel Emulator
+  include_tasks: deploy_channel_emulator.yml
+  when: rru == 'rfsim' and channel_emulator_enabled | default(false)
+
+# ── UEs — 12 UEs (4 par slice : eMBB, URLLC, mMTC) ──────────────────────────
+- name: Deploy srsRAN UEs
+  include_tasks: deploy_srsues.yml
+  when: rru == 'rfsim'
+
+# ── Broker GNU Radio ──────────────────────────────────────────────────────────
+- name: Start GNU Radio broker
   include_tasks: start_broker.yml
   when: rru == 'rfsim'
 
@@ -28,8 +35,7 @@
 - name: Deploy Telegraf
   include_tasks: deploy_telegraf.yml
 
-# ── RL xApp ───────────────────────────────────────────────────────────────────
-# Doit être déployé APRÈS le gNB (le xApp a besoin d'un nœud E2 connecté)
-- name: Deploy RL xApp (PPO closed-loop PRB slicing)
+# ── RL xApp — après le gNB (E2 agent doit être connecté) ─────────────────────
+- name: Deploy RL xApp (PPO ou DQN — closed-loop PRB slicing)
   include_tasks: deploy_rl_xapp.yml
   when: ric_enabled | default(false)

@@ -1,7 +1,7 @@
 # =============================================================================
 # Fichier : roles/5g/srsRAN/common/defaults/main.yml
-# Ce fichier remplace/complète le fichier existant dans 5g_ansible
-# Ajouts : variables RIC et xApp RL (section en bas)
+# Remplace/complète le fichier existant dans 5g_ansible
+# Ajouts : RIC, xApp RL, channel emulator, 12 UEs
 # =============================================================================
 
 repo_url: "https://github.com/salimKarroum/srsran-helm.git"
@@ -16,14 +16,16 @@ srs_gnb_label_selectors:
 srs_ue_label_selectors:
   - "app=srsran"
   - "component=ue"
-ue_count: 3
-kubectl_bin: "/usr/bin/kubectl"
 
+# 12 UEs — 4 par slice (papier REAL)
+ue_count: 12
+
+kubectl_bin: "/usr/bin/kubectl"
 yq_version: "v4.45.1"
 yq_bin_path: "/usr/local/bin/yq"
 yq_url: "https://github.com/mikefarah/yq/releases/download/{{ yq_version }}/yq_linux_amd64"
 
-# Network config for srsRAN and free5gc
+# ── Réseau ───────────────────────────────────────────────────────────────────
 srsran_network_map:
   free5gc:
     n2:
@@ -58,32 +60,57 @@ n3_nad_name_map:
   free5gc: "{{ free5gc_n3_nad_name }}"
   open5gs: "{{ open5gs_n3_nad_name }}"
 n3_nad_name: "{{ n3_nad_name_map[core] }}"
-
 n3networkName_map:
   free5gc: "n3network-free5gc-free5gc-upf"
   open5gs: "n3network"
 n3networkName: "{{ n3networkName_map[core] }}"
 
 # =============================================================================
-# NOUVEAUX PARAMÈTRES — OSC Near-RT RIC + RL xApp
-# Activer avec : -e ric_enabled=true lors du lancement d'Ansible
+# OSC Near-RT RIC — activer avec -e ric_enabled=true
 # =============================================================================
 
-# Active ou désactive le déploiement du RIC et du xApp RL
 ric_enabled: false
 
-# IP et ports du Near-RT RIC
-# ric_ip doit être accessible par les gNBs (interface réseau du cluster K8s)
 ric_ip: "10.10.3.210"
-ric_e2_port: 36421         # port SCTP E2 standard O-RAN
-ric_e2mgr_port: 3800       # REST API E2 Manager (pour le xApp)
-ric_submgr_port: 8088      # REST API Subscription Manager
+ric_e2_port: 36421
+ric_e2mgr_port: 3800
+ric_submgr_port: 8088
 
-# Paramètres du xApp RL (PPO)
-xapp_ctrl_interval: 0.1    # boucle de contrôle toutes les 100ms
+# =============================================================================
+# RL xApp (PPO ou DQN) — papier REAL
+# =============================================================================
+
+# Algorithme : "PPO" ou "DQN"
+xapp_rl_algo: "PPO"
+
+# Sampling KPM — 500ms conforme papier REAL
+xapp_kpm_sample_ms: 500
+
+# Débits cibles par slice (Mbps)
+xapp_embb_target_mbps: 50
+xapp_urllc_target_mbps: 20
+xapp_mmtc_target_mbps: 5
+
+# Poids α par slice — α_URLLC > α_eMBB ≥ α_mMTC (papier REAL)
+xapp_alpha_embb: 0.3
+xapp_alpha_urllc: 0.5
+xapp_alpha_mmtc: 0.2
+
+# Timesteps d'entraînement
 xapp_ppo_timesteps: 1000000
-xapp_ppo_lr: 0.0003
+xapp_dqn_timesteps: 1000000
 
-# Objectifs QoS par slice
-xapp_embb_target_mbps: 50  # débit cible eMBB en Mbps
-xapp_urllc_target_ms: 5    # latence cible URLLC en ms
+# Intervalle boucle contrôle (secondes)
+xapp_ctrl_interval: 0.5
+
+# =============================================================================
+# GNU Radio Channel Emulator — activer avec -e channel_emulator_enabled=true
+# Conforme papier REAL, section III-B
+# =============================================================================
+
+channel_emulator_enabled: false
+
+channel_distance_min_km: 0.5    # distance min UE-gNB (km)
+channel_distance_max_km: 2.0    # distance max UE-gNB (km)
+channel_doppler_max_hz: 50      # Doppler max (Hz) — mobilité piétonne
+channel_noise_figure_db: 7      # facteur de bruit (dB)

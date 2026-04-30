@@ -1,6 +1,8 @@
 ---
-# Déploie le xApp RL (PPO) après que le gNB soit connecté au RIC
-# Le xApp se connecte au RIC via REST, pas directement au gNB
+# Déploie le xApp RL (PPO ou DQN) après que le gNB soit connecté au RIC
+# Conforme papier REAL (arXiv:2502.00715)
+# Récompense : R = α_eMBB·r_eMBB + α_URLLC·r_URLLC + α_mMTC·r_mMTC
+#              r_slice = max(-1, thr_reçu/thr_cible - 1)
 
 - name: Load srsRAN common variables
   include_vars: "{{ role_path }}/common/defaults/main.yml"
@@ -16,34 +18,50 @@
 - name: Wait for gNB E2 agent to connect to RIC
   pause:
     seconds: 15
-    prompt: "Waiting for gNB E2 agent to establish connection with Near-RT RIC..."
+    prompt: "Waiting for gNB E2 agent to connect to Near-RT RIC..."
 
-- name: Deploy RL xApp (PPO closed-loop PRB slicing)
+- name: Deploy RL xApp (algo={{ xapp_rl_algo }})
   kubernetes.core.helm:
     name: rl-xapp
     chart_ref: "{{ repo_dest_abs }}/charts/rl-xapp"
     namespace: "{{ ran_ns }}"
     create_namespace: true
     values:
+      rlAlgo: "{{ xapp_rl_algo }}"
       ric:
         host: "osc-ric-e2mgr"
         port: "{{ ric_e2mgr_port }}"
       submgr:
         host: "osc-ric-submgr"
         port: "{{ ric_submgr_port }}"
-      controlLoopIntervalSec: "{{ xapp_ctrl_interval }}"
-      ppo:
-        totalTimesteps: "{{ xapp_ppo_timesteps }}"
-        learningRate: "{{ xapp_ppo_lr }}"
+      kpmSampleMs: "{{ xapp_kpm_sample_ms }}"
       slices:
         embb:
           targetThroughputMbps: "{{ xapp_embb_target_mbps }}"
         urllc:
-          targetLatencyMs: "{{ xapp_urllc_target_ms }}"
+          targetThroughputMbps: "{{ xapp_urllc_target_mbps }}"
+        mmtc:
+          targetThroughputMbps: "{{ xapp_mmtc_target_mbps }}"
+      alpha:
+        embb:  "{{ xapp_alpha_embb }}"
+        urllc: "{{ xapp_alpha_urllc }}"
+        mmtc:  "{{ xapp_alpha_mmtc }}"
+      ppo:
+        totalTimesteps: "{{ xapp_ppo_timesteps }}"
+      dqn:
+        totalTimesteps: "{{ xapp_dqn_timesteps }}"
     wait: false
     timeout: "120s"
   register: xapp_deploy
 
-- name: Show RL xApp deployment status
+- name: Show RL xApp deployment result
   debug:
-    msg: "RL xApp deployed. PPO closed-loop slicing is now active ({{ xapp_ppo_timesteps }} timesteps)."
+    msg: >
+      xApp {{ xapp_rl_algo }} déployé.
+      Targets: eMBB={{ xapp_embb_target_mbps }}Mbps
+               URLLC={{ xapp_urllc_target_mbps }}Mbps
+               mMTC={{ xapp_mmtc_target_mbps }}Mbps
+      Alpha:   eMBB={{ xapp_alpha_embb }}
+               URLLC={{ xapp_alpha_urllc }}
+               mMTC={{ xapp_alpha_mmtc }}
+      KPM sampling: {{ xapp_kpm_sample_ms }}ms
