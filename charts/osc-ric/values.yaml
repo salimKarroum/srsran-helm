@@ -17,7 +17,7 @@ e2term:
 e2mgr:
   image:
     repository: nexus3.o-ran-sc.org:10002/o-ran-sc/ric-plt-e2mgr
-    tag: 5.5.0
+    tag: 6.0.8
     pullPolicy: IfNotPresent
   port:
     http: 3800
@@ -26,7 +26,7 @@ e2mgr:
 rtmgr:
   image:
     repository: nexus3.o-ran-sc.org:10002/o-ran-sc/ric-plt-rtmgr
-    tag: 0.9.7
+    tag: 0.9.5
     pullPolicy: IfNotPresent
   port:
     http: 4561
