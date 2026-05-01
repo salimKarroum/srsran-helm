@@ -103,17 +103,17 @@ def run():
     gnb_pull = ctx.socket(zmq.PULL)
     gnb_pull.connect(GNB_TX)
 
-    # Envoi vers UE (RX du UE)
+    # Envoi vers UE (RX du UE) — UE bind son PULL sur UE_RX, on s'y connecte
     ue_push = ctx.socket(zmq.PUSH)
-    ue_push.bind(UE_RX)
+    ue_push.connect(UE_RX)
 
     # Réception depuis UE (TX du UE)
     ue_pull = ctx.socket(zmq.PULL)
     ue_pull.connect(UE_TX)
 
-    # Envoi vers gNB (RX du gNB)
+    # Envoi vers gNB (RX du gNB) — gNB bind son PULL sur GNB_RX, on s'y connecte
     gnb_push = ctx.socket(zmq.PUSH)
-    gnb_push.bind(GNB_RX)
+    gnb_push.connect(GNB_RX)
 
     log.info(f"Canal initialisé. d∈[{D_MIN},{D_MAX}]km "
              f"Doppler_max={DOPPLER_MAX}Hz NF={NF_DB}dB")
