@@ -30,27 +30,22 @@ spec:
               value: "{{ .Values.submgr.port }}"
             - name: KPM_ADAPTER_URL
               value: "http://localhost:{{ .Values.kpmAdapter.restPort }}"
-            # Algorithme : PPO ou DQN
             - name: RL_ALGO
               value: "{{ .Values.rlAlgo }}"
-            # Sampling KPM 500ms (papier REAL)
             - name: KPM_SAMPLE_MS
               value: "{{ .Values.kpmSampleMs }}"
-            # Débits cibles par slice
             - name: EMBB_TARGET_MBPS
               value: "{{ .Values.slices.embb.targetThroughputMbps }}"
             - name: URLLC_TARGET_MBPS
               value: "{{ .Values.slices.urllc.targetThroughputMbps }}"
             - name: MMTC_TARGET_MBPS
               value: "{{ .Values.slices.mmtc.targetThroughputMbps }}"
-            # Poids α par slice (papier REAL)
             - name: ALPHA_EMBB
               value: "{{ .Values.alpha.embb }}"
             - name: ALPHA_URLLC
               value: "{{ .Values.alpha.urllc }}"
             - name: ALPHA_MMTC
               value: "{{ .Values.alpha.mmtc }}"
-            # PPO
             - name: PPO_LR
               value: "{{ .Values.ppo.learningRate }}"
             - name: PPO_N_STEPS
@@ -65,7 +60,6 @@ spec:
               value: "{{ .Values.ppo.clipRange }}"
             - name: TOTAL_TIMESTEPS
               value: "{{ .Values.ppo.totalTimesteps }}"
-            # DQN
             - name: DQN_LR
               value: "{{ .Values.dqn.learningRate }}"
             - name: DQN_BATCH
@@ -89,7 +83,6 @@ spec:
               cpu: {{ .Values.resources.limits.cpu | quote }}
               memory: {{ .Values.resources.limits.memory | quote }}
 
-        # ── Sidecar KPM Adapter ──────────────────────────────────────────────
         - name: kpm-adapter
           image: "{{ .Values.kpmAdapter.image.repository }}:{{ .Values.kpmAdapter.image.tag }}"
           imagePullPolicy: {{ .Values.kpmAdapter.image.pullPolicy }}
@@ -99,7 +92,7 @@ spec:
             - name: REST_PORT
               value: "{{ .Values.kpmAdapter.restPort }}"
             - name: SLICE_MAP
-              value: "{{ .Values.kpmAdapter.sliceMap }}"
+              value: '{{ .Values.kpmAdapter.sliceMap }}'
           ports:
             - containerPort: {{ .Values.kpmAdapter.restPort }}
               name: kpm-rest
