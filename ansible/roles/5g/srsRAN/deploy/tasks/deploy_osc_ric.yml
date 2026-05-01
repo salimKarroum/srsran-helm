@@ -8,7 +8,7 @@
 - name: Remove existing osc-ric release if present
   kubernetes.core.helm:
     name: osc-ric
-    namespace: "{{ ran_ns }}"
+    namespace: "{{ ric_ns }}"
     state: absent
     wait: true
   ignore_errors: true
@@ -17,7 +17,7 @@
   kubernetes.core.helm:
     name: osc-ric
     chart_ref: "{{ repo_dest_abs }}/charts/osc-ric"
-    namespace: "{{ ran_ns }}"
+    namespace: "{{ ric_ns }}"
     create_namespace: true
     values:
       ricIp: "{{ ric_ip }}"
@@ -32,7 +32,7 @@
 - name: Wait for RIC E2 termination to be ready
   kubernetes.core.k8s_info:
     kind: Pod
-    namespace: "{{ ran_ns }}"
+    namespace: "{{ ric_ns }}"
     label_selectors:
       - "component=e2term"
   register: e2term_pods

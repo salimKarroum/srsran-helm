@@ -70,6 +70,7 @@ n3networkName: "{{ n3networkName_map[core] }}"
 # =============================================================================
 
 ric_enabled: false
+ric_ns: "ricplt"
 
 ric_ip: "10.10.3.210"
 ric_e2_port: 36421
