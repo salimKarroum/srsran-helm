@@ -1,0 +1,22 @@
+# =========================
+# RL xApp Dockerfile
+# Python + PyTorch + stable-baselines3 (PPO)
+# =========================
+
+FROM python:3.11-slim
+
+ENV PYTHONUNBUFFERED=1
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN pip install --no-cache-dir \
+    stable-baselines3[extra]==2.3.2 \
+    gymnasium==0.29.1 \
+    requests==2.31.0 \
+    numpy==1.26.4
+
+WORKDIR /app
+
+CMD ["python", "xapp.py"]
