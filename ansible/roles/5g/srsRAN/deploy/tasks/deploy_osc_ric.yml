@@ -5,6 +5,23 @@
 - name: Load srsRAN common variables
   include_vars: "{{ role_path }}/../common/defaults/main.yml"
 
+- name: Load SCTP kernel module (required by e2term)
+  community.general.modprobe:
+    name: sctp
+    state: present
+  delegate_to: "{{ item }}"
+  loop: "{{ groups['sopnodes'] }}"
+  ignore_errors: true
+
+- name: Persist SCTP module across reboots
+  lineinfile:
+    path: /etc/modules-load.d/sctp.conf
+    line: sctp
+    create: true
+  delegate_to: "{{ item }}"
+  loop: "{{ groups['sopnodes'] }}"
+  ignore_errors: true
+
 - name: Remove existing osc-ric release if present
   kubernetes.core.helm:
     name: osc-ric
