@@ -1,23 +1,13 @@
 # =========================
-# GNU Radio Channel Emulator
+# Channel Emulator
 # Émule : FSPL + single-tap multipath + AWGN + Doppler
 # Conforme papier REAL (arXiv:2502.00715), section III-B
 # Distance aléatoire d ∈ [0.5 km, 2 km]
 # =========================
 
-FROM ubuntu:24.04
+FROM python:3.11-slim
 
-ENV DEBIAN_FRONTEND=noninteractive
-
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    gnuradio \
-    python3-numpy \
-    python3-scipy \
-    python3-zmq \
-    python3-pip \
-    && rm -rf /var/lib/apt/lists/*
-
-RUN pip3 install --no-cache-dir pyzmq numpy scipy
+RUN pip install --no-cache-dir pyzmq numpy
 
 WORKDIR /app
 COPY resources/channel_emulator.py /app/channel_emulator.py
