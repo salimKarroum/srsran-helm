@@ -1,0 +1,84 @@
+# =========================
+# RL xApp values — conforme papier REAL (arXiv:2502.00715)
+# =========================
+
+image:
+  repository: ghcr.io/salimkarroum/rl-xapp
+  tag: v1.0
+  pullPolicy: IfNotPresent
+
+rlAlgo: "PPO"
+
+ric:
+  host: osc-ric-e2mgr
+  port: 3800
+
+submgr:
+  host: osc-ric-submgr
+  port: 8088
+
+kpmSampleMs: 500
+
+slices:
+  embb:
+    sst: 1
+    sd: "000001"
+    targetThroughputMbps: 50
+    ueCount: 4
+  urllc:
+    sst: 1
+    sd: "000002"
+    targetThroughputMbps: 20
+    ueCount: 4
+  mmtc:
+    sst: 1
+    sd: "000003"
+    targetThroughputMbps: 5
+    ueCount: 4
+
+alpha:
+  embb: 0.3
+  urllc: 0.5
+  mmtc: 0.2
+
+ppo:
+  learningRate: 0.0003
+  nSteps: 128
+  batchSize: 64
+  nEpochs: 10
+  gamma: 0.99
+  clipRange: 0.2
+  totalTimesteps: 1000000
+
+dqn:
+  learningRate: 0.001
+  batchSize: 64
+  gamma: 0.99
+  explorationFraction: 0.1
+  explorationFinalEps: 0.05
+  targetUpdateInterval: 1000
+  totalTimesteps: 1000000
+
+kpmAdapter:
+  image:
+    repository: ghcr.io/salimkarroum/kpm-adapter
+    tag: v1.0
+    pullPolicy: IfNotPresent
+  wsUrl: "srsran-gnb-metrics:8001"
+  restPort: 8080
+  sliceMap: '{"1:000001":"embb","1:000002":"urllc","1:000003":"mmtc"}'
+  resources:
+    requests:
+      cpu: "50m"
+      memory: "64Mi"
+    limits:
+      cpu: "200m"
+      memory: "128Mi"
+
+resources:
+  requests:
+    cpu: "500m"
+    memory: "1Gi"
+  limits:
+    cpu: "2000m"
+    memory: "2Gi"
