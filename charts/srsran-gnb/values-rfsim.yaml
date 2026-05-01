@@ -3,7 +3,7 @@
 # =========================
 
 image:
-  repository: ghcr.io/ziyad-mabrouk/srsran-gnb-zmq
+  repository: ghcr.io/salimkarroum/srsran-gnb-zmq
   tag: v1.0
   pullPolicy: IfNotPresent
 
