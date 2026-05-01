@@ -51,7 +51,7 @@
     kind: Pod
     namespace: "{{ ric_ns }}"
     label_selectors:
-      - "component=e2term"
+      - "app=osc-ric-e2term"
   register: e2term_pods
   until: >
     e2term_pods.resources | length > 0 and
