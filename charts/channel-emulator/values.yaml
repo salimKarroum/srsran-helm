@@ -1,0 +1,18 @@
+image:
+  repository: ghcr.io/salimkarroum/channel-emulator
+  tag: v1.0
+  pullPolicy: IfNotPresent
+
+gnb:
+  zmqTxAddr: "tcp://srsran-gnb:2000"
+  zmqRxAddr: "tcp://srsran-gnb:2001"
+
+ue:
+  zmqTxAddr: "tcp://srsue:2100"
+  zmqRxAddr: "tcp://srsue:2101"
+
+channel:
+  distanceMinKm: "0.5"
+  distanceMaxKm: "2.0"
+  dopplerMaxHz: "50"
+  noiseFigureDb: "7"

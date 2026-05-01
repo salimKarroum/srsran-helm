@@ -1,0 +1,6 @@
+apiVersion: v2
+name: channel-emulator
+description: Helm chart for the ZMQ channel emulator (FSPL + multipath + AWGN + Doppler)
+type: application
+version: 1.0.0
+appVersion: "1.0"
