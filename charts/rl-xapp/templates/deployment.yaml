@@ -23,23 +23,23 @@ spec:
             - name: RIC_HOST
               value: "{{ .Values.ric.host }}"
             - name: RIC_PORT
-              value: "{{ .Values.ric.port }}"
+              value: "{{ .Values.ric.port | int }}"
             - name: SUBMGR_HOST
               value: "{{ .Values.submgr.host }}"
             - name: SUBMGR_PORT
-              value: "{{ .Values.submgr.port }}"
+              value: "{{ .Values.submgr.port | int }}"
             - name: KPM_ADAPTER_URL
-              value: "http://localhost:{{ .Values.kpmAdapter.restPort }}"
+              value: "http://localhost:{{ .Values.kpmAdapter.restPort | int }}"
             - name: RL_ALGO
               value: "{{ .Values.rlAlgo }}"
             - name: KPM_SAMPLE_MS
-              value: "{{ .Values.kpmSampleMs }}"
+              value: "{{ .Values.kpmSampleMs | int }}"
             - name: EMBB_TARGET_MBPS
-              value: "{{ .Values.slices.embb.targetThroughputMbps }}"
+              value: "{{ .Values.slices.embb.targetThroughputMbps | int }}"
             - name: URLLC_TARGET_MBPS
-              value: "{{ .Values.slices.urllc.targetThroughputMbps }}"
+              value: "{{ .Values.slices.urllc.targetThroughputMbps | int }}"
             - name: MMTC_TARGET_MBPS
-              value: "{{ .Values.slices.mmtc.targetThroughputMbps }}"
+              value: "{{ .Values.slices.mmtc.targetThroughputMbps | int }}"
             - name: ALPHA_EMBB
               value: "{{ .Values.alpha.embb }}"
             - name: ALPHA_URLLC
@@ -49,21 +49,21 @@ spec:
             - name: PPO_LR
               value: "{{ .Values.ppo.learningRate }}"
             - name: PPO_N_STEPS
-              value: "{{ .Values.ppo.nSteps }}"
+              value: "{{ .Values.ppo.nSteps | int }}"
             - name: PPO_BATCH
-              value: "{{ .Values.ppo.batchSize }}"
+              value: "{{ .Values.ppo.batchSize | int }}"
             - name: PPO_N_EPOCHS
-              value: "{{ .Values.ppo.nEpochs }}"
+              value: "{{ .Values.ppo.nEpochs | int }}"
             - name: PPO_GAMMA
               value: "{{ .Values.ppo.gamma }}"
             - name: PPO_CLIP
               value: "{{ .Values.ppo.clipRange }}"
             - name: TOTAL_TIMESTEPS
-              value: "{{ .Values.ppo.totalTimesteps }}"
+              value: "{{ .Values.ppo.totalTimesteps | int }}"
             - name: DQN_LR
               value: "{{ .Values.dqn.learningRate }}"
             - name: DQN_BATCH
-              value: "{{ .Values.dqn.batchSize }}"
+              value: "{{ .Values.dqn.batchSize | int }}"
             - name: DQN_GAMMA
               value: "{{ .Values.dqn.gamma }}"
             - name: DQN_EXPL_FRAC
@@ -71,7 +71,7 @@ spec:
             - name: DQN_EXPL_EPS
               value: "{{ .Values.dqn.explorationFinalEps }}"
             - name: DQN_TARGET_UPD
-              value: "{{ .Values.dqn.targetUpdateInterval }}"
+              value: "{{ .Values.dqn.targetUpdateInterval | int }}"
           volumeMounts:
             - name: xapp-code
               mountPath: /app
@@ -90,16 +90,16 @@ spec:
             - name: WS_URL
               value: "{{ .Values.kpmAdapter.wsUrl }}"
             - name: REST_PORT
-              value: "{{ .Values.kpmAdapter.restPort }}"
+              value: "{{ .Values.kpmAdapter.restPort | int }}"
             - name: SLICE_MAP
               value: '{{ .Values.kpmAdapter.sliceMap }}'
           ports:
-            - containerPort: {{ .Values.kpmAdapter.restPort }}
+            - containerPort: {{ .Values.kpmAdapter.restPort | int }}
               name: kpm-rest
           readinessProbe:
             httpGet:
               path: /health
-              port: {{ .Values.kpmAdapter.restPort }}
+              port: {{ .Values.kpmAdapter.restPort | int }}
             initialDelaySeconds: 5
             periodSeconds: 10
           resources:
