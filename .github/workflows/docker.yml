@@ -4,12 +4,12 @@ on:
   workflow_dispatch:
     inputs:
       images:
-        description: "Select which images to build (comma-separated: zmq, dpdk, uhd, srsue, telegraf, all)"
+        description: "Select which images to build (comma-separated: zmq, dpdk, uhd, srsue, telegraf, rl-xapp, kpm-adapter, channel-emulator, all)"
         required: true
         default: "all"
 
 env:
-  GHCR_USER: ziyad-mabrouk
+  GHCR_USER: salimkarroum
   TAG: v1.0
 
 jobs:
@@ -40,6 +40,18 @@ jobs:
             DOCKERFILE: ./docker/Dockerfile.telegraf
             CONTEXT: ./docker
             KEY: telegraf
+          - NAME: rl-xapp
+            DOCKERFILE: ./docker/Dockerfile.rl-xapp
+            CONTEXT: ./docker
+            KEY: rl-xapp
+          - NAME: kpm-adapter
+            DOCKERFILE: ./docker/Dockerfile.kpm-adapter
+            CONTEXT: ./docker
+            KEY: kpm-adapter
+          - NAME: channel-emulator
+            DOCKERFILE: ./docker/Dockerfile.channel-emulator
+            CONTEXT: ./docker
+            KEY: channel-emulator
 
     steps:
       - name: Checkout code
