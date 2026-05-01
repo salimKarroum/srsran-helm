@@ -1,0 +1,116 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "rl-xapp.fullname" . }}
+  labels:
+    {{- include "rl-xapp.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "rl-xapp.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "rl-xapp.selectorLabels" . | nindent 8 }}
+    spec:
+      containers:
+        - name: rl-xapp
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["python", "/app/xapp.py"]
+          env:
+            - name: RIC_HOST
+              value: "{{ .Values.ric.host }}"
+            - name: RIC_PORT
+              value: "{{ .Values.ric.port }}"
+            - name: SUBMGR_HOST
+              value: "{{ .Values.submgr.host }}"
+            - name: SUBMGR_PORT
+              value: "{{ .Values.submgr.port }}"
+            - name: KPM_ADAPTER_URL
+              value: "http://localhost:{{ .Values.kpmAdapter.restPort }}"
+            - name: RL_ALGO
+              value: "{{ .Values.rlAlgo }}"
+            - name: KPM_SAMPLE_MS
+              value: "{{ .Values.kpmSampleMs }}"
+            - name: EMBB_TARGET_MBPS
+              value: "{{ .Values.slices.embb.targetThroughputMbps }}"
+            - name: URLLC_TARGET_MBPS
+              value: "{{ .Values.slices.urllc.targetThroughputMbps }}"
+            - name: MMTC_TARGET_MBPS
+              value: "{{ .Values.slices.mmtc.targetThroughputMbps }}"
+            - name: ALPHA_EMBB
+              value: "{{ .Values.alpha.embb }}"
+            - name: ALPHA_URLLC
+              value: "{{ .Values.alpha.urllc }}"
+            - name: ALPHA_MMTC
+              value: "{{ .Values.alpha.mmtc }}"
+            - name: PPO_LR
+              value: "{{ .Values.ppo.learningRate }}"
+            - name: PPO_N_STEPS
+              value: "{{ .Values.ppo.nSteps }}"
+            - name: PPO_BATCH
+              value: "{{ .Values.ppo.batchSize }}"
+            - name: PPO_N_EPOCHS
+              value: "{{ .Values.ppo.nEpochs }}"
+            - name: PPO_GAMMA
+              value: "{{ .Values.ppo.gamma }}"
+            - name: PPO_CLIP
+              value: "{{ .Values.ppo.clipRange }}"
+            - name: TOTAL_TIMESTEPS
+              value: "{{ .Values.ppo.totalTimesteps }}"
+            - name: DQN_LR
+              value: "{{ .Values.dqn.learningRate }}"
+            - name: DQN_BATCH
+              value: "{{ .Values.dqn.batchSize }}"
+            - name: DQN_GAMMA
+              value: "{{ .Values.dqn.gamma }}"
+            - name: DQN_EXPL_FRAC
+              value: "{{ .Values.dqn.explorationFraction }}"
+            - name: DQN_EXPL_EPS
+              value: "{{ .Values.dqn.explorationFinalEps }}"
+            - name: DQN_TARGET_UPD
+              value: "{{ .Values.dqn.targetUpdateInterval }}"
+          volumeMounts:
+            - name: xapp-code
+              mountPath: /app
+          resources:
+            requests:
+              cpu: {{ .Values.resources.requests.cpu | quote }}
+              memory: {{ .Values.resources.requests.memory | quote }}
+            limits:
+              cpu: {{ .Values.resources.limits.cpu | quote }}
+              memory: {{ .Values.resources.limits.memory | quote }}
+
+        - name: kpm-adapter
+          image: "{{ .Values.kpmAdapter.image.repository }}:{{ .Values.kpmAdapter.image.tag }}"
+          imagePullPolicy: {{ .Values.kpmAdapter.image.pullPolicy }}
+          env:
+            - name: WS_URL
+              value: "{{ .Values.kpmAdapter.wsUrl }}"
+            - name: REST_PORT
+              value: "{{ .Values.kpmAdapter.restPort }}"
+            - name: SLICE_MAP
+              value: '{{ .Values.kpmAdapter.sliceMap }}'
+          ports:
+            - containerPort: {{ .Values.kpmAdapter.restPort }}
+              name: kpm-rest
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: {{ .Values.kpmAdapter.restPort }}
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: {{ .Values.kpmAdapter.resources.requests.cpu | quote }}
+              memory: {{ .Values.kpmAdapter.resources.requests.memory | quote }}
+            limits:
+              cpu: {{ .Values.kpmAdapter.resources.limits.cpu | quote }}
+              memory: {{ .Values.kpmAdapter.resources.limits.memory | quote }}
+
+      volumes:
+        - name: xapp-code
+          configMap:
+            name: {{ include "rl-xapp.fullname" . }}-code
