@@ -1,0 +1,37 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "channel-emulator.fullname" . }}
+  labels:
+    {{- include "channel-emulator.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "channel-emulator.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "channel-emulator.selectorLabels" . | nindent 8 }}
+    spec:
+      containers:
+        - name: channel-emulator
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            - name: GNB_ZMQ_TX_ADDR
+              value: "{{ .Values.gnb.zmqTxAddr }}"
+            - name: GNB_ZMQ_RX_ADDR
+              value: "{{ .Values.gnb.zmqRxAddr }}"
+            - name: UE_ZMQ_TX_ADDR
+              value: "{{ .Values.ue.zmqTxAddr }}"
+            - name: UE_ZMQ_RX_ADDR
+              value: "{{ .Values.ue.zmqRxAddr }}"
+            - name: DISTANCE_MIN_KM
+              value: "{{ .Values.channel.distanceMinKm }}"
+            - name: DISTANCE_MAX_KM
+              value: "{{ .Values.channel.distanceMaxKm }}"
+            - name: DOPPLER_MAX_HZ
+              value: "{{ .Values.channel.dopplerMaxHz }}"
+            - name: NOISE_FIGURE_DB
+              value: "{{ .Values.channel.noiseFigureDb }}"
