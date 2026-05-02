@@ -126,3 +126,15 @@ podAnnotations:
 env:
   - name: GOMP_CPU_AFFINITY
     value: "16-19"                     # Bind srsRAN threads to isolated cores
+
+probes:
+  enabled: true
+  readiness:
+    initialDelaySeconds: 15
+    periodSeconds: 10
+    failureThreshold: 6
+  liveness:
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    failureThreshold: 3
+

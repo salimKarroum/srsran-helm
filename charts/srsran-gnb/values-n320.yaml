@@ -92,3 +92,15 @@ nodeSelector:
   kubernetes.io/hostname: "sopnode-f3"
 nodeName: sopnode-f3
 # END ANSIBLE MANAGED NODE SELECTOR
+
+probes:
+  enabled: true
+  readiness:
+    initialDelaySeconds: 15
+    periodSeconds: 10
+    failureThreshold: 6
+  liveness:
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    failureThreshold: 3
+

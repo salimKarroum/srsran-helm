@@ -102,3 +102,15 @@ gnbConfig:
     bind_addr: 0.0.0.0
     enabled: true
     port: 8001
+
+probes:
+  enabled: true
+  readiness:
+    initialDelaySeconds: 15
+    periodSeconds: 10
+    failureThreshold: 6
+  liveness:
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    failureThreshold: 3
+

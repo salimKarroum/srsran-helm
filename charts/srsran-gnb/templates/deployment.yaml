@@ -31,6 +31,20 @@ spec:
             - name: metrics
               containerPort: {{ .Values.gnbConfig.remote_control.port }}
               protocol: TCP
+          {{- if and .Values.start.gnb .Values.probes.enabled }}
+          readinessProbe:
+            tcpSocket:
+              port: {{ .Values.gnbConfig.remote_control.port }}
+            initialDelaySeconds: {{ .Values.probes.readiness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.probes.readiness.periodSeconds }}
+            failureThreshold: {{ .Values.probes.readiness.failureThreshold }}
+          livenessProbe:
+            tcpSocket:
+              port: {{ .Values.gnbConfig.remote_control.port }}
+            initialDelaySeconds: {{ .Values.probes.liveness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.probes.liveness.periodSeconds }}
+            failureThreshold: {{ .Values.probes.liveness.failureThreshold }}
+          {{- end }}
           securityContext:
             capabilities:
               add: ["NET_ADMIN"]
@@ -49,11 +63,11 @@ spec:
           {{- if .Values.resources.define}}
           resources:
             requests:
-              memory: {{ .Values.resources.requests.tcpdump.memory | quote }}
-              cpu: {{ .Values.resources.requests.tcpdump.cpu | quote }}
+              memory: {{ .Values.resources.requests.memory | quote }}
+              cpu: {{ .Values.resources.requests.cpu | quote }}
             limits:
-              memory: {{ .Values.resources.limits.tcpdump.memory | quote }}
-              cpu: {{ .Values.resources.limits.tcpdump.cpu | quote }}
+              memory: {{ .Values.resources.limits.memory | quote }}
+              cpu: {{ .Values.resources.limits.cpu | quote }}
           {{- end}}
       {{- if .Values.start.logs }}
         - name: gnb-logs
@@ -84,4 +98,4 @@ spec:
         - name: host-mount
           hostPath:
             path: /mnt/
-            type: Directory
+            type: DirectoryOrCreate

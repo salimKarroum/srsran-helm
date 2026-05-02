@@ -100,8 +100,9 @@ spec:
             httpGet:
               path: /health
               port: {{ .Values.kpmAdapter.restPort | int }}
-            initialDelaySeconds: 5
+            initialDelaySeconds: 10
             periodSeconds: 10
+            failureThreshold: 12
           resources:
             requests:
               cpu: {{ .Values.kpmAdapter.resources.requests.cpu | quote }}
