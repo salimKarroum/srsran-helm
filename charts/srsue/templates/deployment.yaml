@@ -38,6 +38,28 @@ spec:
           volumeMounts:
             - name: ue-config
               mountPath: /srsran/config
+        {{- if .Values.channelEmulator.enabled }}
+        - name: channel-emulator
+          image: "{{ .Values.channelEmulator.image.repository }}:{{ .Values.channelEmulator.image.tag }}"
+          imagePullPolicy: {{ .Values.channelEmulator.image.pullPolicy }}
+          env:
+            - name: GNB_TX_ADDR
+              value: "tcp://{{ .Values.gnbIp }}:2000"
+            - name: UE_TX_ADDR
+              value: "tcp://{{ .Values.ueIp }}:2101"
+            - name: GNB_RX_BIND
+              value: "tcp://0.0.0.0:2001"
+            - name: UE_RX_BIND
+              value: "tcp://0.0.0.0:2100"
+            - name: DISTANCE_MIN_KM
+              value: "{{ .Values.channelEmulator.distanceMinKm }}"
+            - name: DISTANCE_MAX_KM
+              value: "{{ .Values.channelEmulator.distanceMaxKm }}"
+            - name: DOPPLER_MAX_HZ
+              value: "{{ .Values.channelEmulator.dopplerMaxHz }}"
+            - name: NOISE_FIGURE_DB
+              value: "{{ .Values.channelEmulator.noiseFigureDb }}"
+        {{- end }}
       dnsPolicy: ClusterFirst
       restartPolicy: Always
       volumes:
