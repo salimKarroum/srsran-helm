@@ -5,11 +5,11 @@ image:
 
 gnb:
   zmqTxAddr: "tcp://srsran-gnb:2000"
-  zmqRxAddr: "tcp://srsran-gnb:2001"
+  zmqRxBind: "tcp://0.0.0.0:2001"
 
 ue:
-  zmqTxAddr: "tcp://srsue:2100"
-  zmqRxAddr: "tcp://srsue:2101"
+  zmqTxAddr: "tcp://srsue:2101"
+  zmqRxBind: "tcp://0.0.0.0:2100"
 
 channel:
   distanceMinKm: "0.5"

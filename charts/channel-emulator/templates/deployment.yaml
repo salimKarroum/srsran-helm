@@ -19,14 +19,14 @@ spec:
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           env:
-            - name: GNB_ZMQ_TX_ADDR
+            - name: GNB_TX_ADDR
               value: "{{ .Values.gnb.zmqTxAddr }}"
-            - name: GNB_ZMQ_RX_ADDR
-              value: "{{ .Values.gnb.zmqRxAddr }}"
-            - name: UE_ZMQ_TX_ADDR
+            - name: GNB_RX_BIND
+              value: "{{ .Values.gnb.zmqRxBind }}"
+            - name: UE_TX_ADDR
               value: "{{ .Values.ue.zmqTxAddr }}"
-            - name: UE_ZMQ_RX_ADDR
-              value: "{{ .Values.ue.zmqRxAddr }}"
+            - name: UE_RX_BIND
+              value: "{{ .Values.ue.zmqRxBind }}"
             - name: DISTANCE_MIN_KM
               value: "{{ .Values.channel.distanceMinKm }}"
             - name: DISTANCE_MAX_KM
