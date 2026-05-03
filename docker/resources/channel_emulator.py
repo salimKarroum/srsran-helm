@@ -63,18 +63,8 @@ def _awgn(n, snr_db):
     return (np.random.randn(n) + 1j * np.random.randn(n)) * np.sqrt(p / 2)
 
 def _apply_channel(sig, d_km, dop_hz, sr=23.04e6):
-    n   = len(sig)
-    a   = _fspl_linear(d_km, FC_GHZ)
-    out = sig * a
-    td  = np.random.randint(0, 6)
-    if td > 0 and n > td:
-        out[td:] += (np.random.uniform(0.3, 0.7)
-                     * np.exp(1j * np.random.uniform(0, 2 * np.pi))
-                     * sig[:-td])
-    out *= np.exp(1j * 2 * np.pi * dop_hz * np.arange(n) / sr)
-    snr_db = -20 * np.log10(max(a, 1e-10)) - NF_DB
-    out   += _awgn(n, snr_db)
-    return out
+    # Pass-through: no channel effects, verify ZMQ path first
+    return sig.copy()
 
 # ── Buffer thread-safe ────────────────────────────────────────────────
 class IQBuffer:
@@ -120,10 +110,16 @@ def server(dst_bind, buf, name, doppler_sign):
     rep.setsockopt(zmq.LINGER, 0)
     rep.bind(dst_bind)
     log.info(f"[{name}/server] REP bind {dst_bind}")
+    count = 0
+    t0 = time.time()
     while True:
         try:
             _maybe_reset()
             rep.recv()                          # requête de la destination
+            count += 1
+            if count % 1000 == 0:
+                elapsed = time.time() - t0
+                log.info(f"[{name}/server] {count} requests, rate={count/elapsed:.0f}/s")
             d, dop = _get_params()
             iq     = buf.get()                  # dernier IQ disponible (zéros si vide)
             iq_out = _apply_channel(iq, d, doppler_sign * dop).astype(np.complex64)
