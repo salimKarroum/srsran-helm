@@ -118,10 +118,9 @@ data:
 
     def generate_ue_config(ue_number: int, output_directory: str) -> str:
         os.makedirs(output_directory, exist_ok=True)
-        # Values are injected by Helm during deployment
         cfg = UE_TEMPLATE.format(
-            tx_port=f"tcp://{{ .Values.ueIp }}:{{ .Values.zmq.tx_port }}",
-            rx_port=f"tcp://{{ .Values.gnbIp }}:{{ .Values.zmq.rx_port }}",
+            tx_port="tcp://{{ .Values.ueIp }}:{{ .Values.zmqTxPort }}",
+            rx_port="tcp://{{ .Values.ueIp }}:{{ .Values.zmqRxPort }}",
             log_file=os.path.join(output_directory, f"ue{ue_number}.log"),
             opc="{{ .Values.opc }}",
             k="{{ .Values.k }}",
