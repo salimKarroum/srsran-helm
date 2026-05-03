@@ -108,7 +108,9 @@ def bridge(src_addr, dst_bind, name, doppler_sign=1.0):
             req.send(b"")
             raw = req.recv()
 
-            iq     = np.frombuffer(raw, dtype=np.complex64).copy()
+            iq = np.frombuffer(raw, dtype=np.complex64).copy()
+            if len(iq) == 0:
+                iq = np.zeros(23040, dtype=np.complex64)
             iq_out = apply_channel(iq, d, doppler_sign * dop).astype(np.complex64)
 
             rep.recv()

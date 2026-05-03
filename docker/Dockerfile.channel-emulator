@@ -12,10 +12,10 @@ RUN pip install --no-cache-dir pyzmq numpy
 WORKDIR /app
 COPY resources/channel_emulator.py /app/channel_emulator.py
 
-ENV GNB_ZMQ_TX_ADDR="tcp://srsran-gnb:2000"
-ENV GNB_ZMQ_RX_ADDR="tcp://srsran-gnb:2001"
-ENV UE_ZMQ_TX_ADDR="tcp://srsue:2100"
-ENV UE_ZMQ_RX_ADDR="tcp://srsue:2101"
+ENV GNB_TX_ADDR="tcp://srsran-gnb:2000"
+ENV GNB_RX_BIND="tcp://0.0.0.0:2001"
+ENV UE_TX_ADDR="tcp://127.0.0.1:2101"
+ENV UE_RX_BIND="tcp://0.0.0.0:2100"
 ENV DISTANCE_MIN_KM="0.5"
 ENV DISTANCE_MAX_KM="2.0"
 ENV DOPPLER_MAX_HZ="50"
