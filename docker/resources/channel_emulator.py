@@ -85,13 +85,19 @@ def apply_channel(sig, d_km, dop_hz, sr=23.04e6):
 # ── Bridge REQ/REP ──────────────────────────────────────────────────
 def bridge(src_addr, dst_bind, name, doppler_sign=1.0):
     """
-    - REQ connecte vers src (source REP bind) : tire les IQ.
-    - REP se bind à dst : sert les IQ à la destination quand elle les demande.
+    - REP se bind à dst : attend la requête de la destination (gNB RX ou srsUE RX).
+    - REQ connecte vers src : poll la source (srsUE TX ou gNB TX) avec timeout.
+    Si la source ne répond pas dans le délai (srsUE pas encore en TX), on envoie
+    des zéros pour garder la destination en mouvement et éviter le deadlock.
     """
     ctx = zmq.Context()
 
     req = ctx.socket(zmq.REQ)
     req.setsockopt(zmq.LINGER, 0)
+    # 80 ms < timeout ZMQ gNB (~168 ms) : si la source bloque, on retourne des zéros
+    req.setsockopt(zmq.RCVTIMEO, 80)
+    req.setsockopt(zmq.REQ_RELAXED, 1)   # autorise re-send après timeout
+    req.setsockopt(zmq.REQ_CORRELATE, 1)
     req.connect(src_addr)
 
     rep = ctx.socket(zmq.REP)
@@ -105,15 +111,22 @@ def bridge(src_addr, dst_bind, name, doppler_sign=1.0):
             maybe_reset()
             d, dop = get_params()
 
+            # 1. Attendre la requête de la destination d'abord (son timer commence à l'envoi)
+            rep.recv()
+
+            # 2. Poller la source avec timeout pour ne pas bloquer la destination
             req.send(b"")
-            raw = req.recv()
+            try:
+                raw = req.recv()
+            except zmq.Again:
+                raw = b""
 
             iq = np.frombuffer(raw, dtype=np.complex64).copy()
             if len(iq) == 0:
                 iq = np.zeros(23040, dtype=np.complex64)
             iq_out = apply_channel(iq, d, doppler_sign * dop).astype(np.complex64)
 
-            rep.recv()
+            # 3. Répondre à la destination
             rep.send(iq_out.tobytes())
 
         except Exception as exc:
