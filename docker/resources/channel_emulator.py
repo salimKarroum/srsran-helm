@@ -90,14 +90,8 @@ def poller(src_addr, buf, name):
     req.setsockopt(zmq.LINGER, 0)
     req.connect(src_addr)
     log.info(f"[{name}/poller] REQ → {src_addr}")
-    t_next = time.monotonic()
     while True:
         try:
-            # Rate-limit DL poller to 1 kHz so gNB runs at real-time speed
-            now = time.monotonic()
-            if now < t_next:
-                time.sleep(t_next - now)
-            t_next += 0.001
             req.send(b"")
             raw = req.recv()
             iq  = np.frombuffer(raw, dtype=np.complex64).copy() if raw else np.zeros(N_SAMPLES, dtype=np.complex64)
