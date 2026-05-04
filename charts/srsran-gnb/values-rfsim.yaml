@@ -42,7 +42,7 @@ gnbConfig:
   ru_sdr:
     device_driver: zmq
     device_args: >-
-      tx_port=tcp://10.10.3.231:2000,rx_port=tcp://10.10.3.235:2001,base_srate=23.04e6
+      tx_port=tcp://10.10.3.231:2000,rx_port=tcp://10.10.3.235:2101,base_srate=23.04e6
     srate: 23.04
     tx_gain: 75
     rx_gain: 75
