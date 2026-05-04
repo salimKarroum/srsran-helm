@@ -8,7 +8,7 @@ image:
   pullPolicy: IfNotPresent
 
 ueIp: 10.10.3.235
-gnbIp: 10.10.3.231
+gnbIp: 10.10.3.234
 
 # SIM credentials
 imsi: "001010000001121"
