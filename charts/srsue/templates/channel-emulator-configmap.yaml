@@ -21,7 +21,9 @@ data:
     GNB_RX_BIND = os.getenv("GNB_RX_BIND",  "tcp://0.0.0.0:2001")
     UE_RX_BIND  = os.getenv("UE_RX_BIND",   "tcp://0.0.0.0:2100")
 
-    N_SAMPLES   = int(os.getenv("N_SAMPLES",       "23040"))
+    N_SAMPLES    = int(os.getenv("N_SAMPLES",       "23040"))
+    SRATE        = float(os.getenv("BASE_SRATE",    "23.04e6"))
+    FRAME_PERIOD = N_SAMPLES / SRATE               # ~1 ms — pace pollers to gNB frame clock
     D_MIN       = float(os.getenv("DISTANCE_MIN_KM",  "0.5"))
     D_MAX       = float(os.getenv("DISTANCE_MAX_KM",  "2.0"))
     DOPPLER_MAX = float(os.getenv("DOPPLER_MAX_HZ",   "50"))
@@ -71,8 +73,14 @@ data:
         req.setsockopt(zmq.LINGER, 0)
         req.connect(src_addr)
         log.info(f"[{name}/poller] REQ -> {src_addr}")
+        t_next = time.monotonic()
         while True:
             try:
+                now = time.monotonic()
+                wait = t_next - now
+                if wait > 0:
+                    time.sleep(wait)
+                t_next += FRAME_PERIOD
                 req.send(b"")
                 raw = req.recv()
                 iq  = np.frombuffer(raw, dtype=np.complex64).copy() if raw else np.zeros(N_SAMPLES, dtype=np.complex64)
@@ -81,7 +89,7 @@ data:
                 buf.put(iq)
             except Exception as exc:
                 log.error(f"[{name}/poller] {exc}")
-                time.sleep(0.001)
+                t_next = time.monotonic() + FRAME_PERIOD
 
     def server(dst_bind, buf, name, doppler_sign):
         ctx = zmq.Context()
