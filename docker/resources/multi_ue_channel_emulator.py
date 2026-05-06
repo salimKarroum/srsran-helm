@@ -110,13 +110,23 @@ def _apply_channel(sig, dist_km, doppler_hz, snr_db, sr=23.04e6):
 
 
 # ── Threads ───────────────────────────────────────────────────────────────────
+def _make_req(ctx, addr, label, timeout_ms=2000):
+    """Crée un socket REQ avec timeout et LINGER=0."""
+    s = ctx.socket(zmq.REQ)
+    s.setsockopt(zmq.LINGER, 0)
+    s.setsockopt(zmq.RCVTIMEO, timeout_ms)
+    s.setsockopt(zmq.SNDTIMEO, timeout_ms)
+    s.connect(addr)
+    log.info(f"[{label}] REQ → {addr}")
+    return s
+
+
 def dl_poller(gnb_tx_addr, dl_buf):
-    """Tire des IQ depuis le TX REP du gNB → remplit dl_buf partagé."""
+    """Tire des IQ depuis le TX REP du gNB → remplit dl_buf partagé.
+    Reconnecte automatiquement si le gNB redémarre (timeout ZMQ REQ/REP).
+    """
     ctx = zmq.Context()
-    req = ctx.socket(zmq.REQ)
-    req.setsockopt(zmq.LINGER, 0)
-    req.connect(gnb_tx_addr)
-    log.info(f"[DL/poller] REQ → {gnb_tx_addr}")
+    req = _make_req(ctx, gnb_tx_addr, "DL/poller")
     while True:
         try:
             req.send(b"")
@@ -125,9 +135,16 @@ def dl_poller(gnb_tx_addr, dl_buf):
             if len(iq) == 0:
                 iq = np.zeros(N_SAMPLES, dtype=np.complex64)
             dl_buf.put(iq)
+        except zmq.Again:
+            log.warning("[DL/poller] timeout — reconnexion gNB")
+            req.close()
+            time.sleep(0.5)
+            req = _make_req(ctx, gnb_tx_addr, "DL/poller")
         except Exception as exc:
             log.error(f"[DL/poller] {exc}")
-            time.sleep(0.001)
+            req.close()
+            time.sleep(0.5)
+            req = _make_req(ctx, gnb_tx_addr, "DL/poller")
 
 
 def ue_dl_server(ue_cfg, dl_buf):
@@ -160,13 +177,12 @@ def ue_dl_server(ue_cfg, dl_buf):
 
 
 def ue_ul_poller(ue_cfg, ul_buf):
-    """Tire des IQ depuis le TX REP de l'UE → remplit ul_buf de cet UE."""
-    ctx = zmq.Context()
-    req = ctx.socket(zmq.REQ)
-    req.setsockopt(zmq.LINGER, 0)
-    req.connect(ue_cfg["tx_addr"])
+    """Tire des IQ depuis le TX REP de l'UE → remplit ul_buf de cet UE.
+    Reconnecte si l'UE redémarre.
+    """
+    ctx  = zmq.Context()
     name = ue_cfg["name"]
-    log.info(f"[UL/{name}] REQ → {ue_cfg['tx_addr']}")
+    req  = _make_req(ctx, ue_cfg["tx_addr"], f"UL/{name}")
     while True:
         try:
             req.send(b"")
@@ -174,15 +190,21 @@ def ue_ul_poller(ue_cfg, ul_buf):
             iq  = np.frombuffer(raw, dtype=np.complex64).copy() if raw else np.zeros(N_SAMPLES, dtype=np.complex64)
             if len(iq) == 0:
                 iq = np.zeros(N_SAMPLES, dtype=np.complex64)
-            # Applique canal UL (même modèle, Doppler inversé)
             iq_ch = _apply_channel(iq,
                                    ue_cfg["dist_km"],
                                    -ue_cfg["doppler_hz"],
                                    ue_cfg["snr_db"])
             ul_buf.put(iq_ch)
+        except zmq.Again:
+            log.warning(f"[UL/{name}] timeout — reconnexion UE")
+            req.close()
+            time.sleep(0.5)
+            req = _make_req(ctx, ue_cfg["tx_addr"], f"UL/{name}")
         except Exception as exc:
             log.error(f"[UL/{name}] {exc}")
-            time.sleep(0.001)
+            req.close()
+            time.sleep(0.5)
+            req = _make_req(ctx, ue_cfg["tx_addr"], f"UL/{name}")
 
 
 def gnb_ul_server(gnb_rx_bind, ul_bufs):
