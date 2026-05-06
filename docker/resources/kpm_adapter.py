@@ -61,9 +61,17 @@ def _aggregate(data: dict) -> dict:
         "dl_nok":       0,
     })
 
-    cells = data.get("cells", {})
-    for cell in cells.values():
-        for ue in cell.get("ue_list", {}).values():
+    cells = data.get("cells", [])
+    # accept both list (srsRAN_Project format) and legacy dict keyed by cell_id
+    if isinstance(cells, dict):
+        cells = list(cells.values())
+
+    for cell in cells:
+        ue_list = cell.get("ue_list", [])
+        if isinstance(ue_list, dict):
+            ue_list = list(ue_list.values())
+
+        for ue in ue_list:
             name = _slice_name(ue.get("s_nssai", {}))
             s = slices[name]
             s["dl_brate_sum"] += float(ue.get("dl_brate", 0))
@@ -71,7 +79,8 @@ def _aggregate(data: dict) -> dict:
             s["dl_ok"]        += int(ue.get("dl_nof_ok",  0))
             s["dl_nok"]       += int(ue.get("dl_nof_nok", 0))
             s["ue_count"]     += 1
-        cm = cell.get("cell_metrics", {})
+        # dl_prb_usage is directly in the cell object in srsRAN_Project
+        cm = cell.get("cell_metrics", cell)
         prb_dl = float(cm.get("dl_prb_usage", 0))
         for s in slices.values():
             s["prb_usage"]  += prb_dl
@@ -98,14 +107,21 @@ def _on_open(ws):
 
 
 def _on_message(_ws, message):
-    with suppress(json.JSONDecodeError):
+    try:
         data = json.loads(message)
-        if "cmd" in data:
-            return
-        kpm = _aggregate(data)
-        with _lock:
-            _raw.clear(); _raw.update(data)
-            _kpm.clear(); _kpm.update(kpm)
+    except json.JSONDecodeError:
+        return
+    # srsRAN_Project sends either a dict or a bare list of cells
+    if isinstance(data, list):
+        data = {"cells": data}
+    elif not isinstance(data, dict):
+        return
+    if "cmd" in data:
+        return
+    kpm = _aggregate(data)
+    with _lock:
+        _raw.clear(); _raw.update(data)
+        _kpm.clear(); _kpm.update(kpm)
 
 
 def _on_error(_ws, error):

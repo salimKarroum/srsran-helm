@@ -96,6 +96,10 @@ spec:
           ports:
             - containerPort: {{ .Values.kpmAdapter.restPort | int }}
               name: kpm-rest
+          volumeMounts:
+            - name: xapp-code
+              mountPath: /app/kpm_adapter.py
+              subPath: kpm_adapter.py
           readinessProbe:
             httpGet:
               path: /health
