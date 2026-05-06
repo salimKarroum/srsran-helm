@@ -1,0 +1,128 @@
+{{- if .Values.channelEmulator.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: channel-emulator-script
+  labels:
+    {{- include "srsran-ue.labels" . | nindent 4 }}
+data:
+  channel_emulator.py: |
+    #!/usr/bin/env python3
+    import os, time, threading, logging
+    import numpy as np
+    import zmq
+
+    logging.basicConfig(level=logging.INFO,
+                        format="%(asctime)s %(levelname)s %(message)s")
+    log = logging.getLogger("channel-emulator")
+
+    GNB_TX_ADDR = os.getenv("GNB_TX_ADDR",  "tcp://10.10.3.234:2000")
+    UE_TX_ADDR  = os.getenv("UE_TX_ADDR",   "tcp://127.0.0.1:2101")
+    GNB_RX_BIND = os.getenv("GNB_RX_BIND",  "tcp://0.0.0.0:2001")
+    UE_RX_BIND  = os.getenv("UE_RX_BIND",   "tcp://0.0.0.0:2100")
+
+    N_SAMPLES   = int(os.getenv("N_SAMPLES",       "23040"))
+    D_MIN       = float(os.getenv("DISTANCE_MIN_KM",  "0.5"))
+    D_MAX       = float(os.getenv("DISTANCE_MAX_KM",  "2.0"))
+    DOPPLER_MAX = float(os.getenv("DOPPLER_MAX_HZ",   "50"))
+    NF_DB       = float(os.getenv("NOISE_FIGURE_DB",   "7"))
+    FC_GHZ      = float(os.getenv("CARRIER_FREQ_GHZ",  "1.8"))
+    RESET_S     = float(os.getenv("RESET_INTERVAL_S",  "5.0"))
+
+    _chan_lock = threading.Lock()
+    _chan = {
+        "d":       np.random.uniform(D_MIN, D_MAX),
+        "doppler": np.random.uniform(-DOPPLER_MAX, DOPPLER_MAX),
+        "ts":      time.time(),
+    }
+
+    def _maybe_reset():
+        if time.time() - _chan["ts"] > RESET_S:
+            with _chan_lock:
+                _chan["d"]       = np.random.uniform(D_MIN, D_MAX)
+                _chan["doppler"] = np.random.uniform(-DOPPLER_MAX, DOPPLER_MAX)
+                _chan["ts"]      = time.time()
+            log.info(f"Canal reset -> d={_chan['d']:.2f} km  dop={_chan['doppler']:.1f} Hz")
+
+    def _get_params():
+        with _chan_lock:
+            return _chan["d"], _chan["doppler"]
+
+    def _apply_channel(sig, d_km, dop_hz, sr=23.04e6):
+        return sig.copy()
+
+    class IQBuffer:
+        def __init__(self, n):
+            self._lock = threading.Lock()
+            self._buf  = np.zeros(n, dtype=np.complex64)
+
+        def put(self, arr):
+            with self._lock:
+                n = min(len(arr), len(self._buf))
+                self._buf[:n] = arr[:n]
+
+        def get(self):
+            with self._lock:
+                return self._buf.copy()
+
+    def poller(src_addr, buf, name):
+        ctx = zmq.Context()
+        req = ctx.socket(zmq.REQ)
+        req.setsockopt(zmq.LINGER, 0)
+        req.connect(src_addr)
+        log.info(f"[{name}/poller] REQ -> {src_addr}")
+        while True:
+            try:
+                req.send(b"")
+                raw = req.recv()
+                iq  = np.frombuffer(raw, dtype=np.complex64).copy() if raw else np.zeros(N_SAMPLES, dtype=np.complex64)
+                if len(iq) == 0:
+                    iq = np.zeros(N_SAMPLES, dtype=np.complex64)
+                buf.put(iq)
+            except Exception as exc:
+                log.error(f"[{name}/poller] {exc}")
+                time.sleep(0.001)
+
+    def server(dst_bind, buf, name, doppler_sign):
+        ctx = zmq.Context()
+        rep = ctx.socket(zmq.REP)
+        rep.setsockopt(zmq.LINGER, 0)
+        rep.bind(dst_bind)
+        log.info(f"[{name}/server] REP bind {dst_bind}")
+        count = 0
+        t0 = time.time()
+        while True:
+            try:
+                _maybe_reset()
+                rep.recv()
+                count += 1
+                if count % 1000 == 0:
+                    elapsed = time.time() - t0
+                    log.info(f"[{name}/server] {count} requests, rate={count/elapsed:.0f}/s")
+                d, dop = _get_params()
+                iq     = buf.get()
+                iq_out = _apply_channel(iq, d, doppler_sign * dop).astype(np.complex64)
+                rep.send(iq_out.tobytes())
+            except Exception as exc:
+                log.error(f"[{name}/server] {exc}")
+                time.sleep(0.001)
+
+    if __name__ == "__main__":
+        log.info("Channel emulator started (4-thread buffer architecture)")
+        log.info(f"  DL : {GNB_TX_ADDR} -> {UE_RX_BIND}")
+        log.info(f"  UL : {UE_TX_ADDR}  -> {GNB_RX_BIND}")
+
+        dl_buf = IQBuffer(N_SAMPLES)
+        ul_buf = IQBuffer(N_SAMPLES)
+
+        threads = [
+            threading.Thread(target=poller, args=(GNB_TX_ADDR, dl_buf, "DL"), daemon=True),
+            threading.Thread(target=server, args=(UE_RX_BIND,  dl_buf, "DL",  1.0), daemon=True),
+            threading.Thread(target=poller, args=(UE_TX_ADDR,  ul_buf, "UL"), daemon=True),
+            threading.Thread(target=server, args=(GNB_RX_BIND, ul_buf, "UL", -1.0), daemon=True),
+        ]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+{{- end }}
