@@ -13,26 +13,26 @@ gnb:
   zmqTxAddr: "tcp://10.10.3.234:2000"
   zmqRxBind: "tcp://0.0.0.0:2001"
 
-# UE1 — eMBB: stationary, close range
+# UE1 — eMBB: stationary, close range, high SNR
 ue1:
   txAddr:    "tcp://10.10.3.235:2101"
   rxBind:    "tcp://0.0.0.0:2011"
   distKm:    "0.5"
   dopplerHz: "0.0"
-  noiseDb:   "7.0"
+  snrDb:     "30.0"
 
-# UE2 — URLLC: mobile 40 km/h (fd=67 Hz at 1.8 GHz), medium range
+# UE2 — URLLC: mobile 40 km/h (fd=67 Hz at 1.8 GHz), medium SNR
 ue2:
   txAddr:    "tcp://10.10.3.236:2103"
   rxBind:    "tcp://0.0.0.0:2013"
   distKm:    "1.0"
   dopplerHz: "67.0"
-  noiseDb:   "9.0"
+  snrDb:     "20.0"
 
-# UE3 — mMTC: IoT stationary, far range
+# UE3 — mMTC: IoT stationary, far range, lower SNR
 ue3:
   txAddr:    "tcp://10.10.3.237:2105"
   rxBind:    "tcp://0.0.0.0:2015"
   distKm:    "1.5"
   dopplerHz: "0.0"
-  noiseDb:   "12.0"
+  snrDb:     "15.0"

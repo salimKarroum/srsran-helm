@@ -33,7 +33,7 @@ GNB_RX_BIND = os.getenv("GNB_RX_BIND", "tcp://0.0.0.0:2001")
 N_SAMPLES   = int(os.getenv("N_SAMPLES", "23040"))
 FC_GHZ      = float(os.getenv("CARRIER_FREQ_GHZ", "1.8"))
 
-# Configuration par UE : (tx_addr, rx_bind, dist_km, doppler_hz, noise_db)
+# Configuration par UE : (tx_addr, rx_bind, dist_km, doppler_hz, snr_db)
 UE_CONFIGS = [
     {   # UE1 — eMBB : stationnaire, proche
         "name":       "embb",
@@ -41,7 +41,7 @@ UE_CONFIGS = [
         "rx_bind":    os.getenv("UE1_RX_BIND",    "tcp://0.0.0.0:2011"),
         "dist_km":    float(os.getenv("UE1_DIST_KM",    "0.5")),
         "doppler_hz": float(os.getenv("UE1_DOPPLER_HZ", "0.0")),
-        "noise_db":   float(os.getenv("UE1_NOISE_DB",   "7.0")),
+        "snr_db":     float(os.getenv("UE1_SNR_DB",     "30.0")),
     },
     {   # UE2 — URLLC : mobile 40 km/h, distance moyenne
         "name":       "urllc",
@@ -49,7 +49,7 @@ UE_CONFIGS = [
         "rx_bind":    os.getenv("UE2_RX_BIND",    "tcp://0.0.0.0:2013"),
         "dist_km":    float(os.getenv("UE2_DIST_KM",    "1.0")),
         "doppler_hz": float(os.getenv("UE2_DOPPLER_HZ", "67.0")),
-        "noise_db":   float(os.getenv("UE2_NOISE_DB",   "9.0")),
+        "snr_db":     float(os.getenv("UE2_SNR_DB",     "20.0")),
     },
     {   # UE3 — mMTC : IoT stationnaire, loin
         "name":       "mmtc",
@@ -57,7 +57,7 @@ UE_CONFIGS = [
         "rx_bind":    os.getenv("UE3_RX_BIND",    "tcp://0.0.0.0:2015"),
         "dist_km":    float(os.getenv("UE3_DIST_KM",    "1.5")),
         "doppler_hz": float(os.getenv("UE3_DOPPLER_HZ", "0.0")),
-        "noise_db":   float(os.getenv("UE3_NOISE_DB",   "12.0")),
+        "snr_db":     float(os.getenv("UE3_SNR_DB",     "15.0")),
     },
 ]
 
@@ -80,30 +80,31 @@ class IQBuffer:
 
 
 # ── Modèle de canal ──────────────────────────────────────────────────────────
-def _fspl_gain(d_km, f_ghz):
-    db = 20 * np.log10(max(d_km, 1e-3)) + 20 * np.log10(f_ghz) + 92.45
-    return 10 ** (-db / 20.0)
+def _apply_channel(sig, dist_km, doppler_hz, snr_db, sr=23.04e6):
+    """Fading mono-trajet + Doppler + AWGN sur signal ZMQ normalisé.
 
-def _apply_channel(sig, dist_km, doppler_hz, noise_db, sr=23.04e6):
-    """Applique FSPL + fading mono-trajet + AWGN + Doppler (simplifié)."""
-    n   = len(sig)
-    # Free-Space Path Loss
-    gain = _fspl_gain(dist_km, FC_GHZ)
-    out  = sig * gain
+    Pas de FSPL absolue : les samples ZMQ sont en bande de base normalisée.
+    L'atténuation relative est modélisée via l'amplitude du fading.
+    snr_db est le SNR cible en dB (positif = signal > bruit).
+    """
+    n = len(sig)
 
-    # Fading mono-trajet (gain complexe fixe pour la session)
-    fade = np.complex64(0.85 + 0.25j)
-    out  = out * fade
+    # Fading : amplitude décroît doucement avec la distance
+    fade_amp = 1.0 / (1.0 + dist_km)   # eMBB≈0.67, URLLC≈0.5, mMTC≈0.4
+    fade     = np.complex64(complex(fade_amp * 0.85, fade_amp * 0.25))
+    out      = sig * fade
 
-    # Décalage Doppler (rotation de phase)
+    # Doppler (rotation de phase linéaire)
     if abs(doppler_hz) > 0.1:
         t   = np.arange(n, dtype=np.float32) / sr
         out = out * np.exp(1j * 2 * np.pi * doppler_hz * t).astype(np.complex64)
 
-    # AWGN
-    snr_lin = 10 ** (-noise_db / 10.0)
-    noise   = (np.random.randn(n) + 1j * np.random.randn(n)).astype(np.complex64)
-    out     = out + noise * np.sqrt(snr_lin / 2)
+    # AWGN calibré sur la puissance du signal après fading
+    snr_lin   = 10 ** (snr_db / 10.0)
+    sig_power = float(np.mean(np.abs(out) ** 2)) or 1e-10
+    noise_std = np.sqrt(sig_power / (2.0 * snr_lin))
+    noise     = (np.random.randn(n) + 1j * np.random.randn(n)).astype(np.complex64)
+    out       = out + noise * noise_std
 
     return out.astype(np.complex64)
 
@@ -137,7 +138,7 @@ def ue_dl_server(ue_cfg, dl_buf):
     rep.bind(ue_cfg["rx_bind"])
     name = ue_cfg["name"]
     log.info(f"[DL/{name}] REP bind {ue_cfg['rx_bind']} "
-             f"(d={ue_cfg['dist_km']}km, dop={ue_cfg['doppler_hz']}Hz, NF={ue_cfg['noise_db']}dB)")
+             f"(d={ue_cfg['dist_km']}km, dop={ue_cfg['doppler_hz']}Hz, NF={ue_cfg['snr_db']}dB)")
     count = 0
     t0 = time.time()
     while True:
@@ -151,7 +152,7 @@ def ue_dl_server(ue_cfg, dl_buf):
             iq_out = _apply_channel(iq,
                                     ue_cfg["dist_km"],
                                     ue_cfg["doppler_hz"],
-                                    ue_cfg["noise_db"])
+                                    ue_cfg["snr_db"])
             rep.send(iq_out.tobytes())
         except Exception as exc:
             log.error(f"[DL/{name}] {exc}")
@@ -177,7 +178,7 @@ def ue_ul_poller(ue_cfg, ul_buf):
             iq_ch = _apply_channel(iq,
                                    ue_cfg["dist_km"],
                                    -ue_cfg["doppler_hz"],
-                                   ue_cfg["noise_db"])
+                                   ue_cfg["snr_db"])
             ul_buf.put(iq_ch)
         except Exception as exc:
             log.error(f"[UL/{name}] {exc}")
@@ -216,7 +217,7 @@ if __name__ == "__main__":
     log.info(f"gNB RX : {GNB_RX_BIND}")
     for cfg in UE_CONFIGS:
         log.info(f"  UE [{cfg['name']}] tx={cfg['tx_addr']} dl={cfg['rx_bind']} "
-                 f"d={cfg['dist_km']}km dop={cfg['doppler_hz']}Hz NF={cfg['noise_db']}dB")
+                 f"d={cfg['dist_km']}km dop={cfg['doppler_hz']}Hz NF={cfg['snr_db']}dB")
 
     dl_buf  = IQBuffer(N_SAMPLES)
     ul_bufs = [IQBuffer(N_SAMPLES) for _ in UE_CONFIGS]

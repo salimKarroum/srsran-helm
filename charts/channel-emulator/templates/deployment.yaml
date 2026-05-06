@@ -40,8 +40,8 @@ spec:
               value: "{{ .Values.ue1.distKm }}"
             - name: UE1_DOPPLER_HZ
               value: "{{ .Values.ue1.dopplerHz }}"
-            - name: UE1_NOISE_DB
-              value: "{{ .Values.ue1.noiseDb }}"
+            - name: UE1_SNR_DB
+              value: "{{ .Values.ue1.snrDb }}"
             # UE2 — URLLC
             - name: UE2_TX_ADDR
               value: "{{ .Values.ue2.txAddr }}"
@@ -51,8 +51,8 @@ spec:
               value: "{{ .Values.ue2.distKm }}"
             - name: UE2_DOPPLER_HZ
               value: "{{ .Values.ue2.dopplerHz }}"
-            - name: UE2_NOISE_DB
-              value: "{{ .Values.ue2.noiseDb }}"
+            - name: UE2_SNR_DB
+              value: "{{ .Values.ue2.snrDb }}"
             # UE3 — mMTC
             - name: UE3_TX_ADDR
               value: "{{ .Values.ue3.txAddr }}"
@@ -62,8 +62,8 @@ spec:
               value: "{{ .Values.ue3.distKm }}"
             - name: UE3_DOPPLER_HZ
               value: "{{ .Values.ue3.dopplerHz }}"
-            - name: UE3_NOISE_DB
-              value: "{{ .Values.ue3.noiseDb }}"
+            - name: UE3_SNR_DB
+              value: "{{ .Values.ue3.snrDb }}"
           volumeMounts:
             - name: scripts
               mountPath: /scripts
