@@ -9,13 +9,13 @@ data:
   channel_emulator.py: |
     #!/usr/bin/env python3
     """
-    Synchronous ZMQ proxy channel emulator.
+    Hybrid channel emulator:
+      DL: synchronous proxy  srsUE-REQ -> gNB-TX -> srsUE  (no overflow)
+      UL: buffered           srsUE-TX  -> ul_buf -> gNB     (immediate reply)
 
-    DL: waits for srsUE REQ -> asks gNB TX -> forwards IQ to srsUE
-    UL: waits for gNB  REQ -> asks srsUE TX -> forwards IQ to gNB
-
-    Timing is driven by the endpoints themselves, so the gNB runs at
-    exactly its natural frame rate with no buffer overflow.
+    The UL server replies to gNB immediately (zeros if srsUE not yet attached),
+    so gNB TX/RX thread is never blocked and can serve DL to srsUE.
+    Once srsUE attaches the UL poller fills the buffer with real IQ.
     """
     import os, time, threading, logging
     import numpy as np
@@ -32,9 +32,24 @@ data:
 
     N_SAMPLES = int(os.getenv("N_SAMPLES", "23040"))
 
+    class IQBuffer:
+        def __init__(self, n):
+            self._lock = threading.Lock()
+            self._buf  = np.zeros(n, dtype=np.complex64)
+
+        def put(self, arr):
+            with self._lock:
+                n = min(len(arr), len(self._buf))
+                self._buf[:n] = arr[:n]
+
+        def get(self):
+            with self._lock:
+                return self._buf.copy()
+
 
     def dl_proxy():
-        """DL: srsUE asks for DL -> proxy asks gNB -> forwards IQ."""
+        """Synchronous DL: srsUE asks for DL -> proxy asks gNB -> returns IQ.
+        gNB TX is only asked after srsUE asks, so gNB rate = srsUE rate = no overflow."""
         ctx = zmq.Context()
         gnb = ctx.socket(zmq.REQ)
         gnb.setsockopt(zmq.LINGER, 0)
@@ -49,54 +64,69 @@ data:
         t0 = time.time()
         while True:
             try:
-                ue.recv()          # srsUE requests DL samples
-                gnb.send(b"")      # ask gNB for DL samples
-                dl = gnb.recv()    # receive DL IQ from gNB
-                ue.send(dl)        # forward to srsUE
+                ue.recv()
+                gnb.send(b"")
+                dl = gnb.recv()
+                ue.send(dl)
                 count += 1
                 if count % 1000 == 0:
-                    log.info(f"DL proxy: {count} frames, rate={count/(time.time()-t0):.0f}/s")
+                    log.info(f"DL proxy: {count} frames, {count/(time.time()-t0):.0f}/s")
             except Exception as e:
                 log.error(f"DL proxy: {e}")
                 time.sleep(0.01)
 
 
-    def ul_proxy():
-        """UL: gNB asks for UL -> proxy asks srsUE -> forwards IQ."""
+    def ul_poller(ul_buf):
+        """Polls srsUE TX for UL IQ. Blocks when srsUE has no samples (before
+        attachment), but runs in its own thread so it never blocks the UL server."""
         ctx = zmq.Context()
-        ue = ctx.socket(zmq.REQ)
-        ue.setsockopt(zmq.LINGER, 0)
-        ue.connect(UE_TX_ADDR)
+        req = ctx.socket(zmq.REQ)
+        req.setsockopt(zmq.LINGER, 0)
+        req.connect(UE_TX_ADDR)
+        log.info(f"UL poller: REQ -> {UE_TX_ADDR}")
+        while True:
+            try:
+                req.send(b"")
+                raw = req.recv()
+                if raw:
+                    ul_buf.put(np.frombuffer(raw, dtype=np.complex64).copy())
+            except Exception as e:
+                log.error(f"UL poller: {e}")
+                time.sleep(0.01)
 
-        gnb = ctx.socket(zmq.REP)
-        gnb.setsockopt(zmq.LINGER, 0)
-        gnb.bind(GNB_RX_BIND)
 
-        log.info(f"UL proxy ready: {GNB_RX_BIND} <-> {UE_TX_ADDR}")
+    def ul_server(ul_buf):
+        """Serves gNB UL REQ immediately from buffer (zeros until srsUE attaches)."""
+        ctx = zmq.Context()
+        rep = ctx.socket(zmq.REP)
+        rep.setsockopt(zmq.LINGER, 0)
+        rep.bind(GNB_RX_BIND)
+        log.info(f"UL server: REP bind {GNB_RX_BIND}")
         count = 0
         t0 = time.time()
         while True:
             try:
-                gnb.recv()         # gNB requests UL samples
-                ue.send(b"")       # ask srsUE for UL samples
-                ul = ue.recv()     # receive UL IQ from srsUE
-                gnb.send(ul)       # forward to gNB
+                rep.recv()
+                rep.send(ul_buf.get().tobytes())
                 count += 1
                 if count % 1000 == 0:
-                    log.info(f"UL proxy: {count} frames, rate={count/(time.time()-t0):.0f}/s")
+                    log.info(f"UL server: {count} frames, {count/(time.time()-t0):.0f}/s")
             except Exception as e:
-                log.error(f"UL proxy: {e}")
+                log.error(f"UL server: {e}")
                 time.sleep(0.01)
 
 
     if __name__ == "__main__":
-        log.info("Channel emulator started (synchronous proxy)")
+        log.info("Channel emulator started (hybrid: DL=sync-proxy, UL=buffered)")
         log.info(f"  DL : {GNB_TX_ADDR} -> {UE_RX_BIND}")
         log.info(f"  UL : {UE_TX_ADDR}  -> {GNB_RX_BIND}")
 
+        ul_buf = IQBuffer(N_SAMPLES)
+
         threads = [
-            threading.Thread(target=dl_proxy, daemon=True),
-            threading.Thread(target=ul_proxy, daemon=True),
+            threading.Thread(target=dl_proxy,                  daemon=True),
+            threading.Thread(target=ul_poller, args=(ul_buf,), daemon=True),
+            threading.Thread(target=ul_server, args=(ul_buf,), daemon=True),
         ]
         for t in threads:
             t.start()
