@@ -361,6 +361,8 @@ data:
         ws.send(json.dumps({"cmd": "metrics_subscribe"}))
     
     
+    _seen_key_sets = set()
+    
     def _on_message(_ws, message):
         try:
             data = json.loads(message)
@@ -373,6 +375,17 @@ data:
             return
         if "cmd" in data:
             return
+        # Log each unique top-level key structure once for debugging
+        key_sig = frozenset(data.keys())
+        if key_sig not in _seen_key_sets:
+            _seen_key_sets.add(key_sig)
+            log.info(f"New message type: {sorted(data.keys())}")
+            # Log sub-keys for discovery
+            for k, v in data.items():
+                if isinstance(v, dict):
+                    log.info(f"  {k} sub-keys: {sorted(v.keys())}")
+                elif isinstance(v, list) and v:
+                    log.info(f"  {k}[0] keys: {sorted(v[0].keys()) if isinstance(v[0], dict) else type(v[0])}")
         kpm = _aggregate(data)
         with _lock:
             _raw.clear(); _raw.update(data)
