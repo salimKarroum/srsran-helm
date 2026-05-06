@@ -3,16 +3,36 @@ image:
   tag: v1.0
   pullPolicy: IfNotPresent
 
+# IP assigned to the emulator on the n3 (RAN) network
+emulatorIp: "10.10.3.233"
+
+nSamples: "23040"
+carrierFreqGhz: "1.8"
+
 gnb:
-  zmqTxAddr: "tcp://srsran-gnb:2000"
+  zmqTxAddr: "tcp://10.10.3.234:2000"
   zmqRxBind: "tcp://0.0.0.0:2001"
 
-ue:
-  zmqTxAddr: "tcp://srsue:2101"
-  zmqRxBind: "tcp://0.0.0.0:2100"
+# UE1 — eMBB: stationary, close range
+ue1:
+  txAddr:    "tcp://10.10.3.235:2101"
+  rxBind:    "tcp://0.0.0.0:2011"
+  distKm:    "0.5"
+  dopplerHz: "0.0"
+  noiseDb:   "7.0"
 
-channel:
-  distanceMinKm: "0.5"
-  distanceMaxKm: "2.0"
-  dopplerMaxHz: "50"
-  noiseFigureDb: "7"
+# UE2 — URLLC: mobile 40 km/h (fd=67 Hz at 1.8 GHz), medium range
+ue2:
+  txAddr:    "tcp://10.10.3.236:2103"
+  rxBind:    "tcp://0.0.0.0:2013"
+  distKm:    "1.0"
+  dopplerHz: "67.0"
+  noiseDb:   "9.0"
+
+# UE3 — mMTC: IoT stationary, far range
+ue3:
+  txAddr:    "tcp://10.10.3.237:2105"
+  rxBind:    "tcp://0.0.0.0:2015"
+  distKm:    "1.5"
+  dopplerHz: "0.0"
+  noiseDb:   "12.0"

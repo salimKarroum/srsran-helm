@@ -1,0 +1,27 @@
+# =========================
+# UE2 — URLLC slice (sst=1, sd=000002)
+# Mobile 40 km/h, medium range, low latency
+# =========================
+
+image:
+  repository: ghcr.io/ziyad-mabrouk/srsue
+  tag: v1.0
+  pullPolicy: IfNotPresent
+
+ueIp: 10.10.3.236
+gnbIp: 10.10.3.234
+
+imsi: "001010000001122"
+k: "fec86ba6eb707ed08905757b1bb44b8f"
+opc: "C42449363BBAD02B66D16BC975D77CC1"
+apn: "internet"
+
+# UL: srsUE REP binds tcp://*:2103 — channel emulator REQ polls here
+# DL: srsUE REQ connects to emulator DL server at :2013
+zmqTxPort: 2103
+zmqTxHost: "*"
+zmqRxHost: "10.10.3.233"
+zmqRxPort: 2013
+
+channelEmulator:
+  enabled: false

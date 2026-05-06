@@ -294,15 +294,30 @@ data:
     _lock = threading.Lock()
     _raw  = {}
     _kpm  = {}
-    
-    
+
+    # RNTI->slice mapping: srsRAN_Project does not report s_nssai per-UE in WebSocket
+    # metrics, so we map by order of first appearance (embb=1st, urllc=2nd, mmtc=3rd).
+    _SLICE_ORDER   = ["embb", "urllc", "mmtc"]
+    _rnti_order:   list = []
+    _rnti_slice:   dict = {}
+
+
     def _slice_name(s_nssai: dict) -> str:
         if not s_nssai:
-            return "embb"  # srsRAN_Project doesn't report s_nssai per-UE; default to embb
+            return "embb"
         sst = str(s_nssai.get("sst", ""))
         sd  = str(s_nssai.get("sd", ""))
         key = f"{sst}:{sd}" if sd else sst
         return SLICE_MAP.get(key) or SST_FALLBACK.get(sst, "embb")
+
+
+    def _slice_by_rnti(rnti: int) -> str:
+        if rnti not in _rnti_slice:
+            idx = len(_rnti_order)
+            _rnti_order.append(rnti)
+            _rnti_slice[rnti] = _SLICE_ORDER[idx] if idx < len(_SLICE_ORDER) else "embb"
+            log.info(f"New RNTI {rnti:#06x} -> {_rnti_slice[rnti]} (UE #{idx+1})")
+        return _rnti_slice[rnti]
     
     
     def _aggregate(data: dict) -> dict:
@@ -327,7 +342,8 @@ data:
                 ue_list = list(ue_list.values())
     
             for ue in ue_list:
-                name = _slice_name(ue.get("s_nssai", {}))
+                rnti = ue.get("rnti")
+                name = _slice_by_rnti(rnti) if rnti is not None else _slice_name(ue.get("s_nssai", {}))
                 s = slices[name]
                 s["dl_brate_sum"] += float(ue.get("dl_brate", 0))
                 # srsRAN_Project uses pucch_snr_db (not pusch_snr_db)

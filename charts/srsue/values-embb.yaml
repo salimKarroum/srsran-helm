@@ -1,0 +1,27 @@
+# =========================
+# UE1 — eMBB slice (sst=1, sd=000001)
+# Stationary, close range, high throughput
+# =========================
+
+image:
+  repository: ghcr.io/ziyad-mabrouk/srsue
+  tag: v1.0
+  pullPolicy: IfNotPresent
+
+ueIp: 10.10.3.235
+gnbIp: 10.10.3.234
+
+imsi: "001010000001121"
+k: "fec86ba6eb707ed08905757b1bb44b8f"
+opc: "C42449363BBAD02B66D16BC975D77CC1"
+apn: "internet"
+
+# UL: srsUE REP binds tcp://*:2101 — channel emulator REQ polls here
+# DL: srsUE REQ connects to emulator DL server at :2011
+zmqTxPort: 2101
+zmqTxHost: "*"
+zmqRxHost: "10.10.3.233"
+zmqRxPort: 2011
+
+channelEmulator:
+  enabled: false

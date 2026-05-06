@@ -13,25 +13,62 @@ spec:
     metadata:
       labels:
         {{- include "channel-emulator.selectorLabels" . | nindent 8 }}
+      annotations:
+        k8s.v1.cni.cncf.io/networks: >-
+          [{ "name": "n3network", "interface": "n3", "ips": [ "{{ .Values.emulatorIp }}/24" ] }]
     spec:
       containers:
         - name: channel-emulator
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["python3", "/scripts/multi_ue_channel_emulator.py"]
           env:
             - name: GNB_TX_ADDR
               value: "{{ .Values.gnb.zmqTxAddr }}"
             - name: GNB_RX_BIND
               value: "{{ .Values.gnb.zmqRxBind }}"
-            - name: UE_TX_ADDR
-              value: "{{ .Values.ue.zmqTxAddr }}"
-            - name: UE_RX_BIND
-              value: "{{ .Values.ue.zmqRxBind }}"
-            - name: DISTANCE_MIN_KM
-              value: "{{ .Values.channel.distanceMinKm }}"
-            - name: DISTANCE_MAX_KM
-              value: "{{ .Values.channel.distanceMaxKm }}"
-            - name: DOPPLER_MAX_HZ
-              value: "{{ .Values.channel.dopplerMaxHz }}"
-            - name: NOISE_FIGURE_DB
-              value: "{{ .Values.channel.noiseFigureDb }}"
+            - name: N_SAMPLES
+              value: "{{ .Values.nSamples }}"
+            - name: CARRIER_FREQ_GHZ
+              value: "{{ .Values.carrierFreqGhz }}"
+            # UE1 — eMBB
+            - name: UE1_TX_ADDR
+              value: "{{ .Values.ue1.txAddr }}"
+            - name: UE1_RX_BIND
+              value: "{{ .Values.ue1.rxBind }}"
+            - name: UE1_DIST_KM
+              value: "{{ .Values.ue1.distKm }}"
+            - name: UE1_DOPPLER_HZ
+              value: "{{ .Values.ue1.dopplerHz }}"
+            - name: UE1_NOISE_DB
+              value: "{{ .Values.ue1.noiseDb }}"
+            # UE2 — URLLC
+            - name: UE2_TX_ADDR
+              value: "{{ .Values.ue2.txAddr }}"
+            - name: UE2_RX_BIND
+              value: "{{ .Values.ue2.rxBind }}"
+            - name: UE2_DIST_KM
+              value: "{{ .Values.ue2.distKm }}"
+            - name: UE2_DOPPLER_HZ
+              value: "{{ .Values.ue2.dopplerHz }}"
+            - name: UE2_NOISE_DB
+              value: "{{ .Values.ue2.noiseDb }}"
+            # UE3 — mMTC
+            - name: UE3_TX_ADDR
+              value: "{{ .Values.ue3.txAddr }}"
+            - name: UE3_RX_BIND
+              value: "{{ .Values.ue3.rxBind }}"
+            - name: UE3_DIST_KM
+              value: "{{ .Values.ue3.distKm }}"
+            - name: UE3_DOPPLER_HZ
+              value: "{{ .Values.ue3.dopplerHz }}"
+            - name: UE3_NOISE_DB
+              value: "{{ .Values.ue3.noiseDb }}"
+          volumeMounts:
+            - name: scripts
+              mountPath: /scripts
+      volumes:
+        - name: scripts
+          configMap:
+            name: {{ include "channel-emulator.fullname" . }}-scripts
+            defaultMode: 0755

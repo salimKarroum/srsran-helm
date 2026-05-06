@@ -1,0 +1,27 @@
+# =========================
+# UE3 — mMTC slice (sst=1, sd=000003)
+# IoT stationary, far range, low bitrate
+# =========================
+
+image:
+  repository: ghcr.io/ziyad-mabrouk/srsue
+  tag: v1.0
+  pullPolicy: IfNotPresent
+
+ueIp: 10.10.3.237
+gnbIp: 10.10.3.234
+
+imsi: "001010000001123"
+k: "fec86ba6eb707ed08905757b1bb44b8f"
+opc: "C42449363BBAD02B66D16BC975D77CC1"
+apn: "internet"
+
+# UL: srsUE REP binds tcp://*:2105 — channel emulator REQ polls here
+# DL: srsUE REQ connects to emulator DL server at :2015
+zmqTxPort: 2105
+zmqTxHost: "*"
+zmqRxHost: "10.10.3.233"
+zmqRxPort: 2015
+
+channelEmulator:
+  enabled: false
