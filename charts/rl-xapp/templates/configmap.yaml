@@ -340,18 +340,14 @@ data:
             cm = cell.get("cell_metrics", {})
             if not cm:
                 cm = cell  # fallback: dl_prb_usage directly in cell
-            # Try multiple field names: srsRAN_Project may use any of these
-            prb_dl = (
-                cm.get("dl_prb_usage")          # fraction 0-1 or pct 0-100
+            # srsRAN_Project cell_metrics fields (confirmed from WebSocket inspection):
+            # pucch_tot_rb_usage_avg is the only RB usage metric exposed (fraction 0-1)
+            prb_dl = float(
+                cm.get("pucch_tot_rb_usage_avg")  # srsRAN_Project ≥ 2024 (fraction 0-1)
+                or cm.get("dl_prb_usage")          # legacy / other builds
                 or cm.get("dl_prb_utilization")
-                or cm.get("dl_used_prbs")        # raw PRB count → normalise below
                 or 0
             )
-            # If value looks like a raw PRB count (integer > 1), normalise to fraction
-            if prb_dl > 1:
-                prb_dl = float(prb_dl) / TOTAL_PRB
-            else:
-                prb_dl = float(prb_dl)
             for s in slices.values():
                 s["prb_usage"]  += prb_dl
                 s["cell_count"] += 1
