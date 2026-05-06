@@ -43,11 +43,11 @@ _kpm  = {}
 
 def _slice_name(s_nssai: dict) -> str:
     if not s_nssai:
-        return "unknown"
+        return "embb"  # srsRAN_Project doesn't report s_nssai per-UE; default to embb
     sst = str(s_nssai.get("sst", ""))
     sd  = str(s_nssai.get("sd", ""))
     key = f"{sst}:{sd}" if sd else sst
-    return SLICE_MAP.get(key) or SST_FALLBACK.get(sst, "unknown")
+    return SLICE_MAP.get(key) or SST_FALLBACK.get(sst, "embb")
 
 
 def _aggregate(data: dict) -> dict:
@@ -75,12 +75,16 @@ def _aggregate(data: dict) -> dict:
             name = _slice_name(ue.get("s_nssai", {}))
             s = slices[name]
             s["dl_brate_sum"] += float(ue.get("dl_brate", 0))
-            s["sinr_sum"]     += float(ue.get("pusch_snr_db", 0))
+            # srsRAN_Project uses pucch_snr_db (not pusch_snr_db)
+            sinr = ue.get("pucch_snr_db") or ue.get("pusch_snr_db") or 0
+            s["sinr_sum"]     += float(sinr)
             s["dl_ok"]        += int(ue.get("dl_nof_ok",  0))
             s["dl_nok"]       += int(ue.get("dl_nof_nok", 0))
             s["ue_count"]     += 1
-        # dl_prb_usage is directly in the cell object in srsRAN_Project
-        cm = cell.get("cell_metrics", cell)
+        # cell_metrics is a sub-dict in srsRAN_Project cells format
+        cm = cell.get("cell_metrics", {})
+        if not cm:
+            cm = cell  # fallback: dl_prb_usage directly in cell
         prb_dl = float(cm.get("dl_prb_usage", 0))
         for s in slices.values():
             s["prb_usage"]  += prb_dl
