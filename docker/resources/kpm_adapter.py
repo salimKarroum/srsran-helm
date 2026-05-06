@@ -85,7 +85,18 @@ def _aggregate(data: dict) -> dict:
         cm = cell.get("cell_metrics", {})
         if not cm:
             cm = cell  # fallback: dl_prb_usage directly in cell
-        prb_dl = float(cm.get("dl_prb_usage", 0))
+        # Try multiple field names: srsRAN_Project may use any of these
+        prb_dl = (
+            cm.get("dl_prb_usage")          # fraction 0-1 or pct 0-100
+            or cm.get("dl_prb_utilization")
+            or cm.get("dl_used_prbs")        # raw PRB count → normalise below
+            or 0
+        )
+        # If value looks like a raw PRB count (integer > 1), normalise to fraction
+        if prb_dl > 1:
+            prb_dl = float(prb_dl) / TOTAL_PRB
+        else:
+            prb_dl = float(prb_dl)
         for s in slices.values():
             s["prb_usage"]  += prb_dl
             s["cell_count"] += 1
@@ -134,10 +145,15 @@ def _on_message(_ws, message):
                 log.info(f"  {k} sub-keys: {sorted(v.keys())}")
             elif isinstance(v, list) and v and isinstance(v[0], dict):
                 log.info(f"  {k}[0] keys: {sorted(v[0].keys())}")
-                # Log ue_list[0] keys for UE metric discovery
+                # Log cell_metrics and ue_list[0] keys for field discovery
+                cm = v[0].get("cell_metrics")
+                if isinstance(cm, dict):
+                    log.info(f"    cell_metrics keys: {sorted(cm.keys())}")
+                    log.info(f"    cell_metrics vals: { {kk: cm[kk] for kk in list(cm.keys())[:8]} }")
                 ue_list = v[0].get("ue_list", [])
                 if ue_list and isinstance(ue_list[0], dict):
                     log.info(f"    ue_list[0] keys: {sorted(ue_list[0].keys())}")
+                    log.info(f"    ue_list[0] vals: { {kk: ue_list[0][kk] for kk in list(ue_list[0].keys())[:8]} }")
     # Only update KPM from cells messages (other types overwrite with zeros)
     if "cells" not in data:
         return
