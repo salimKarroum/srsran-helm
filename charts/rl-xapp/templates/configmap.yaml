@@ -380,12 +380,18 @@ data:
         if key_sig not in _seen_key_sets:
             _seen_key_sets.add(key_sig)
             log.info(f"New message type: {sorted(data.keys())}")
-            # Log sub-keys for discovery
             for k, v in data.items():
                 if isinstance(v, dict):
                     log.info(f"  {k} sub-keys: {sorted(v.keys())}")
-                elif isinstance(v, list) and v:
-                    log.info(f"  {k}[0] keys: {sorted(v[0].keys()) if isinstance(v[0], dict) else type(v[0])}")
+                elif isinstance(v, list) and v and isinstance(v[0], dict):
+                    log.info(f"  {k}[0] keys: {sorted(v[0].keys())}")
+                    # Log ue_list[0] keys for UE metric discovery
+                    ue_list = v[0].get("ue_list", [])
+                    if ue_list and isinstance(ue_list[0], dict):
+                        log.info(f"    ue_list[0] keys: {sorted(ue_list[0].keys())}")
+        # Only update KPM from cells messages (other types overwrite with zeros)
+        if "cells" not in data:
+            return
         kpm = _aggregate(data)
         with _lock:
             _raw.clear(); _raw.update(data)
