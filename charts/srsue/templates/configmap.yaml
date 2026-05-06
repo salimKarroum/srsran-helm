@@ -119,7 +119,7 @@ data:
     def generate_ue_config(ue_number: int, output_directory: str) -> str:
         os.makedirs(output_directory, exist_ok=True)
         cfg = UE_TEMPLATE.format(
-            tx_port="tcp://{{ .Values.ueIp }}:{{ .Values.zmqTxPort }}",
+            tx_port="tcp://{{ .Values.zmqTxHost | default .Values.ueIp }}:{{ .Values.zmqTxPort }}",
             rx_port="tcp://{{ .Values.zmqRxHost | default .Values.ueIp }}:{{ .Values.zmqRxPort }}",
             log_file=os.path.join(output_directory, f"ue{ue_number}.log"),
             opc="{{ .Values.opc }}",
