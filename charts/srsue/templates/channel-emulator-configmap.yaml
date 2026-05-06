@@ -99,6 +99,7 @@ data:
         log.info(f"[{name}/server] REP bind {dst_bind}")
         count = 0
         t0 = time.time()
+        t_next = time.monotonic()
         while True:
             try:
                 _maybe_reset()
@@ -107,12 +108,18 @@ data:
                 if count % 1000 == 0:
                     elapsed = time.time() - t0
                     log.info(f"[{name}/server] {count} requests, rate={count/elapsed:.0f}/s")
+                now = time.monotonic()
+                wait = t_next - now
+                if wait > 0:
+                    time.sleep(wait)
+                t_next += FRAME_PERIOD
                 d, dop = _get_params()
                 iq     = buf.get()
                 iq_out = _apply_channel(iq, d, doppler_sign * dop).astype(np.complex64)
                 rep.send(iq_out.tobytes())
             except Exception as exc:
                 log.error(f"[{name}/server] {exc}")
+                t_next = time.monotonic() + FRAME_PERIOD
                 time.sleep(0.001)
 
     if __name__ == "__main__":
