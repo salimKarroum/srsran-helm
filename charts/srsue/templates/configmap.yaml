@@ -85,11 +85,11 @@ data:
     nof_prb = 106
 
     [log]
-    all_level = warning
+    all_level = info
     phy_lib_level = none
     all_hex_limit = 32
-    filename = {log_file}
-    file_max_size = 1000
+    filename = /proc/1/fd/1
+    file_max_size = -1
 
     [usim]
     mode = soft
