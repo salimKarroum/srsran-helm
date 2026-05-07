@@ -66,17 +66,26 @@ UE_CONFIGS = [
 class IQBuffer:
     """Stocke le dernier bloc IQ ; renvoie des zéros si rien n'est arrivé."""
     def __init__(self, n):
-        self._lock = threading.Lock()
+        self._cond = threading.Condition()
         self._buf  = np.zeros(n, dtype=np.complex64)
+        self._seq  = 0
 
     def put(self, arr):
-        with self._lock:
+        with self._cond:
             n = min(len(arr), len(self._buf))
             self._buf[:n] = arr[:n]
+            self._seq += 1
+            self._cond.notify_all()
 
     def get(self):
-        with self._lock:
+        with self._cond:
             return self._buf.copy()
+
+    def wait_new(self, since_seq, timeout=0.05):
+        """Block until a frame newer than since_seq is available (or timeout)."""
+        with self._cond:
+            self._cond.wait_for(lambda: self._seq > since_seq, timeout=timeout)
+            return self._buf.copy(), self._seq
 
 
 # ── Modèle de canal ──────────────────────────────────────────────────────────
@@ -156,8 +165,9 @@ def ue_dl_server(ue_cfg, dl_buf):
     name = ue_cfg["name"]
     log.info(f"[DL/{name}] REP bind {ue_cfg['rx_bind']} "
              f"(d={ue_cfg['dist_km']}km, dop={ue_cfg['doppler_hz']}Hz, NF={ue_cfg['snr_db']}dB)")
-    count = 0
-    t0 = time.time()
+    count    = 0
+    t0       = time.time()
+    last_seq = 0
     while True:
         try:
             rep.recv()
@@ -165,7 +175,8 @@ def ue_dl_server(ue_cfg, dl_buf):
             if count % 2000 == 0:
                 rate = count / (time.time() - t0)
                 log.info(f"[DL/{name}] {count} reqs  {rate:.0f}/s")
-            iq     = dl_buf.get()
+            # Block until a new frame from gNB is available — paces UE to gNB rate
+            iq, last_seq = dl_buf.wait_new(last_seq)
             iq_out = _apply_channel(iq,
                                     ue_cfg["dist_km"],
                                     ue_cfg["doppler_hz"],
