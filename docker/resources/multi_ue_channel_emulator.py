@@ -207,6 +207,8 @@ def ue_ul_poller(ue_cfg, ul_buf):
             req = _make_req(ctx, ue_cfg["tx_addr"], f"UL/{name}")
 
 
+SLOT_S = 1e-3  # 1ms per NR slot — paces gNB to real-time speed
+
 def gnb_ul_server(gnb_rx_bind, ul_bufs):
     """Combine les UL de tous les UEs (OFDM : somme) → sert au gNB."""
     ctx = zmq.Context()
@@ -218,15 +220,19 @@ def gnb_ul_server(gnb_rx_bind, ul_bufs):
     t0    = time.time()
     while True:
         try:
+            t_slot = time.time()
             rep.recv()
             count += 1
             if count % 2000 == 0:
                 rate = count / (time.time() - t0)
                 log.info(f"[UL/gNB] {count} reqs  {rate:.0f}/s")
-            # Somme des signaux UL (OFDM orthogonal sur PRBs différents)
             combined = np.zeros(N_SAMPLES, dtype=np.complex64)
             for buf in ul_bufs:
                 combined += buf.get()
+            elapsed = time.time() - t_slot
+            remaining = SLOT_S - elapsed
+            if remaining > 0:
+                time.sleep(remaining)
             rep.send(combined.tobytes())
         except Exception as exc:
             log.error(f"[UL/gNB] {exc}")
