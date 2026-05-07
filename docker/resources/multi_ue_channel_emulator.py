@@ -19,7 +19,7 @@ Variables d'environnement :
   UE3_TX_ADDR / UE3_RX_BIND / UE3_DIST_KM / UE3_DOPPLER_HZ / UE3_NOISE_DB
 """
 
-import os, time, threading, logging, struct
+import os, time, threading, logging
 import numpy as np
 import zmq
 
@@ -129,7 +129,7 @@ def dl_poller(gnb_tx_addr, dl_buf):
     req = _make_req(ctx, gnb_tx_addr, "DL/poller")
     while True:
         try:
-            req.send(struct.pack('<i', N_SAMPLES))
+            req.send(bytes([0]))
             raw = req.recv()
             iq  = np.frombuffer(raw, dtype=np.complex64).copy() if raw else np.zeros(N_SAMPLES, dtype=np.complex64)
             if len(iq) == 0:
@@ -185,7 +185,7 @@ def ue_ul_poller(ue_cfg, ul_buf):
     req  = _make_req(ctx, ue_cfg["tx_addr"], f"UL/{name}")
     while True:
         try:
-            req.send(struct.pack('<i', N_SAMPLES))
+            req.send(bytes([0]))
             raw = req.recv()
             iq  = np.frombuffer(raw, dtype=np.complex64).copy() if raw else np.zeros(N_SAMPLES, dtype=np.complex64)
             if len(iq) == 0:
