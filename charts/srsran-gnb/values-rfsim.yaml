@@ -38,8 +38,6 @@ gnbConfig:
                 - sst: 1
                 - sst: 1
                   sd: "000002"
-                - sst: 1
-                  sd: "000003"
 
   ru_sdr:
     device_driver: zmq
@@ -73,8 +71,6 @@ gnbConfig:
       - sst: 1
       - sst: 1
         sd: "000002"
-      - sst: 1
-        sd: "000003"
 
   log:
     filename: /var/log/gnb.log
