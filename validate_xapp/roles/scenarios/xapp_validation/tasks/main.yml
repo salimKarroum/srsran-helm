@@ -1,0 +1,227 @@
+---
+# Validate RL xApp: run iperf on 3 slices simultaneously, collect PRB decisions, generate CSV
+
+# ── 1. Timestamp ─────────────────────────────────────────────────────────────
+- name: Get timestamp
+  command: date +"%Y%m%d_%H%M%S"
+  register: ts
+  changed_when: false
+
+- name: Create output directory
+  file:
+    path: /root/IPERF
+    state: directory
+    mode: "0755"
+
+# ── 2. Discover slice UE pods ─────────────────────────────────────────────────
+- name: Get all running pods in namespace
+  kubernetes.core.k8s_info:
+    kind: Pod
+    namespace: "{{ ns }}"
+    field_selectors:
+      - status.phase=Running
+  register: all_pods
+
+- name: Find each slice UE pod
+  set_fact:
+    embb_pod:  "{{ (all_pods.resources | selectattr('metadata.name', 'search', 'embb')  | list | first).metadata.name }}"
+    urllc_pod: "{{ (all_pods.resources | selectattr('metadata.name', 'search', 'urllc') | list | first).metadata.name }}"
+    mmtc_pod:  "{{ (all_pods.resources | selectattr('metadata.name', 'search', 'mmtc')  | list | first).metadata.name }}"
+    xapp_pod:  "{{ (all_pods.resources | selectattr('metadata.name', 'search', 'rl-xapp') | list | first).metadata.name }}"
+
+- name: Show discovered pods
+  debug:
+    msg:
+      - "eMBB  pod : {{ embb_pod }}"
+      - "URLLC pod : {{ urllc_pod }}"
+      - "mMTC  pod : {{ mmtc_pod }}"
+      - "xApp  pod : {{ xapp_pod }}"
+
+# ── 3. Get tun IPs ────────────────────────────────────────────────────────────
+- name: Get eMBB tun IP
+  shell: |
+    kubectl exec -n {{ ns }} {{ embb_pod }} -- \
+    ip -4 addr show tun_srsue | awk '/inet / {print $2}' | cut -d/ -f1
+  register: embb_ip_raw
+  changed_when: false
+
+- name: Get URLLC tun IP
+  shell: |
+    kubectl exec -n {{ ns }} {{ urllc_pod }} -- \
+    ip -4 addr show tun_srsue | awk '/inet / {print $2}' | cut -d/ -f1
+  register: urllc_ip_raw
+  changed_when: false
+
+- name: Get mMTC tun IP
+  shell: |
+    kubectl exec -n {{ ns }} {{ mmtc_pod }} -- \
+    ip -4 addr show tun_srsue | awk '/inet / {print $2}' | cut -d/ -f1
+  register: mmtc_ip_raw
+  changed_when: false
+
+- name: Set tun IPs
+  set_fact:
+    embb_ip:  "{{ embb_ip_raw.stdout  | trim }}"
+    urllc_ip: "{{ urllc_ip_raw.stdout | trim }}"
+    mmtc_ip:  "{{ mmtc_ip_raw.stdout  | trim }}"
+
+- name: Show tun IPs
+  debug:
+    msg:
+      - "eMBB  tun IP : {{ embb_ip }}"
+      - "URLLC tun IP : {{ urllc_ip }}"
+      - "mMTC  tun IP : {{ mmtc_ip }}"
+  failed_when: embb_ip == '' or urllc_ip == '' or mmtc_ip == ''
+
+# ── 4. Install iperf3 in UE pods ──────────────────────────────────────────────
+- name: Install iperf3 in all UE pods
+  shell: |
+    kubectl exec -n {{ ns }} {{ item }} -- bash -c \
+    "command -v iperf3 || apt-get install -y -qq iperf3"
+  loop:
+    - "{{ embb_pod }}"
+    - "{{ urllc_pod }}"
+    - "{{ mmtc_pod }}"
+  failed_when: false
+
+# ── 5. Start iperf3 servers on core node ──────────────────────────────────────
+- name: Kill any existing iperf3 servers
+  shell: pkill iperf3 || true
+  failed_when: false
+
+- name: Start iperf3 servers (one per slice)
+  shell: |
+    /usr/bin/iperf3 -s -B {{ target_server }} -p {{ 5201 + item }} -D \
+      --logfile /root/IPERF/server_{{ item }}_{{ ts.stdout }}.log
+  loop: [0, 1, 2]
+  loop_control:
+    label: "Starting iperf3 server on port {{ 5201 + item }}"
+
+- name: Wait for servers to be ready
+  pause:
+    seconds: 2
+
+# ── 6. Collect xApp logs in background ───────────────────────────────────────
+- name: Start xApp log collection
+  shell: |
+    kubectl logs -n {{ ns }} {{ xapp_pod }} --follow \
+      > /root/IPERF/xapp_{{ ts.stdout }}.log 2>&1 &
+    echo $!
+  register: xapp_logger
+
+- name: Show xApp logger PID
+  debug:
+    msg: "xApp logger PID: {{ xapp_logger.stdout }}"
+
+# ── 7. Run iperf downlink simultaneously on all 3 slices ─────────────────────
+- name: Run iperf downlink on eMBB
+  shell: |
+    kubectl exec -n {{ ns }} {{ embb_pod }} -- \
+    iperf3 -c {{ target_server }} -B {{ embb_ip }} \
+           -p 5201 -t {{ duration }} -R -J \
+      > /root/IPERF/iperf_embb_{{ ts.stdout }}.json
+  async: "{{ duration | int + 30 }}"
+  poll: 0
+  register: iperf_embb
+
+- name: Run iperf downlink on URLLC
+  shell: |
+    kubectl exec -n {{ ns }} {{ urllc_pod }} -- \
+    iperf3 -c {{ target_server }} -B {{ urllc_ip }} \
+           -p 5202 -t {{ duration }} -R -J \
+      > /root/IPERF/iperf_urllc_{{ ts.stdout }}.json
+  async: "{{ duration | int + 30 }}"
+  poll: 0
+  register: iperf_urllc
+
+- name: Run iperf downlink on mMTC
+  shell: |
+    kubectl exec -n {{ ns }} {{ mmtc_pod }} -- \
+    iperf3 -c {{ target_server }} -B {{ mmtc_ip }} \
+           -p 5203 -t {{ duration }} -R -J \
+      > /root/IPERF/iperf_mmtc_{{ ts.stdout }}.json
+  async: "{{ duration | int + 30 }}"
+  poll: 0
+  register: iperf_mmtc
+
+- name: Wait for iperf tests to complete
+  pause:
+    seconds: "{{ duration | int + 15 }}"
+
+# ── 8. Stop background jobs ───────────────────────────────────────────────────
+- name: Stop xApp log collection
+  shell: "kill {{ xapp_logger.stdout }} 2>/dev/null || true"
+  failed_when: false
+
+- name: Stop iperf3 servers
+  shell: pkill iperf3 || true
+  failed_when: false
+
+# ── 9. Generate CSV report ────────────────────────────────────────────────────
+- name: Generate validation report
+  shell: |
+    python3 << 'PYEOF'
+    import json, re, csv, os, sys
+    from datetime import datetime
+
+    ts      = "{{ ts.stdout }}"
+    out_dir = "/root/IPERF"
+    slices  = [
+        ("embb",  "{{ embb_ip }}",  5201),
+        ("urllc", "{{ urllc_ip }}", 5202),
+        ("mmtc",  "{{ mmtc_ip }}",  5203),
+    ]
+    rows = []
+
+    # Parse iperf JSON results
+    for name, ip, port in slices:
+        path = f"{out_dir}/iperf_{name}_{ts}.json"
+        mbps = None
+        if os.path.exists(path):
+            try:
+                with open(path) as f:
+                    data = json.load(f)
+                bits = data["end"]["sum_received"]["bits_per_second"]
+                mbps = round(bits / 1e6, 2)
+            except Exception as e:
+                mbps = f"ERROR: {e}"
+        else:
+            mbps = "NO_FILE"
+        rows.append({"slice": name, "ip": ip, "throughput_mbps": mbps})
+
+    # Parse xApp logs for PRB allocations
+    xapp_log = f"{out_dir}/xapp_{ts}.log"
+    prb_alloc = {r["slice"]: [] for r in rows}
+    if os.path.exists(xapp_log):
+        with open(xapp_log) as f:
+            for line in f:
+                for name in prb_alloc:
+                    m = re.search(rf'(?i){name}[^\d]*(\d+)\s*(?:prb|PRB)', line)
+                    if m:
+                        prb_alloc[name].append(int(m.group(1)))
+
+    for r in rows:
+        allocs = prb_alloc.get(r["slice"], [])
+        r["avg_prb"] = round(sum(allocs) / len(allocs), 1) if allocs else "N/A"
+        r["prb_samples"] = len(allocs)
+
+    # Write CSV
+    csv_path = f"{out_dir}/xapp_validation_{ts}.csv"
+    fieldnames = ["slice", "ip", "throughput_mbps", "avg_prb", "prb_samples"]
+    with open(csv_path, "w", newline="") as f:
+        w = csv.DictWriter(f, fieldnames=fieldnames)
+        w.writeheader()
+        w.writerows(rows)
+
+    print(f"Report: {csv_path}")
+    print(f"{'Slice':<8} {'Throughput':>12}  {'Avg PRB':>8}  {'Samples':>8}")
+    print("-" * 44)
+    for r in rows:
+        print(f"{r['slice']:<8} {str(r['throughput_mbps']):>10} Mbps  {str(r['avg_prb']):>8}  {r['prb_samples']:>8}")
+    PYEOF
+  register: report
+  changed_when: false
+
+- name: Show validation report
+  debug:
+    msg: "{{ report.stdout_lines }}"

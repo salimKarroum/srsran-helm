@@ -1,0 +1,17 @@
+---
+- hosts: all
+  gather_facts: true
+  tasks:
+    - name: Normalize booleans
+      import_tasks: ../tasks/reload_booleans.yml
+
+- name: Validate RL xApp — 3-slice iperf + PRB metrics
+  hosts: core_node
+  become: true
+  gather_facts: false
+  vars:
+    ns:            "{{ core | default('open5gs') }}"
+    duration:      "{{ iperf_duration | default(60) }}"
+    target_server: "{{ hostvars[groups['core_node'][0]].ip }}"
+  roles:
+    - role: scenarios/xapp_validation
