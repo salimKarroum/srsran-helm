@@ -20,7 +20,7 @@ data:
         - 1 server    REP bind :2001              -> sert sum(ul_buf) au gNB
     """
 
-    import os, time, threading, logging
+    import os, time, threading, logging, struct
     import numpy as np
     import zmq
 
@@ -107,7 +107,7 @@ data:
         req = _make_req(ctx, gnb_tx_addr, "DL/poller")
         while True:
             try:
-                req.send(b"")
+                req.send(struct.pack('<i', N_SAMPLES))
                 raw = req.recv()
                 iq  = np.frombuffer(raw, dtype=np.complex64).copy() if raw else np.zeros(N_SAMPLES, dtype=np.complex64)
                 if len(iq) == 0:
@@ -159,7 +159,7 @@ data:
         req  = _make_req(ctx, ue_cfg["tx_addr"], f"UL/{name}")
         while True:
             try:
-                req.send(b"")
+                req.send(struct.pack('<i', N_SAMPLES))
                 raw = req.recv()
                 iq  = np.frombuffer(raw, dtype=np.complex64).copy() if raw else np.zeros(N_SAMPLES, dtype=np.complex64)
                 if len(iq) == 0:
