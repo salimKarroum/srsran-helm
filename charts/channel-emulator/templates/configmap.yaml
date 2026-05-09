@@ -190,7 +190,7 @@ data:
                 req = _make_req(ctx, ue_cfg["tx_addr"], f"UL/{name}")
 
 
-    SLOT_S = 1e-3
+    SLOT_S = 10e-3
 
     def gnb_ul_server(gnb_rx_bind, ul_bufs):
         ctx = zmq.Context()

@@ -218,7 +218,7 @@ def ue_ul_poller(ue_cfg, ul_buf):
             req = _make_req(ctx, ue_cfg["tx_addr"], f"UL/{name}")
 
 
-SLOT_S = 1e-3  # 1ms per NR slot — paces gNB to real-time speed
+SLOT_S = 10e-3  # 10ms per NR frame — matches UE DL rate (~95/s) to prevent SFN divergence
 
 def gnb_ul_server(gnb_rx_bind, ul_bufs):
     """Combine les UL de tous les UEs (OFDM : somme) → sert au gNB."""
