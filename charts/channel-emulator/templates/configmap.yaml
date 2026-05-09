@@ -110,7 +110,7 @@ data:
         return s
 
 
-    def dl_poller(gnb_tx_addr, dl_buf):
+    def dl_poller(gnb_tx_addr, dl_bufs):
         ctx = zmq.Context()
         req = _make_req(ctx, gnb_tx_addr, "DL/poller")
         while True:
@@ -120,7 +120,8 @@ data:
                 iq  = np.frombuffer(raw, dtype=np.complex64).copy() if raw else np.zeros(N_SAMPLES, dtype=np.complex64)
                 if len(iq) == 0:
                     iq = np.zeros(N_SAMPLES, dtype=np.complex64)
-                dl_buf.put(iq)
+                for buf in dl_bufs:
+                    buf.put(iq.copy())
             except zmq.Again:
                 log.warning("[DL/poller] timeout - reconnexion gNB")
                 req.close()
@@ -229,16 +230,16 @@ data:
             log.info(f"  UE [{cfg['name']}] tx={cfg['tx_addr']} dl={cfg['rx_bind']} "
                      f"d={cfg['dist_km']}km dop={cfg['doppler_hz']}Hz SNR={cfg['snr_db']}dB")
 
-        dl_buf  = IQBuffer(N_SAMPLES)
+        dl_bufs = [IQBuffer(N_SAMPLES) for _ in UE_CONFIGS]
         ul_bufs = [IQBuffer(N_SAMPLES) for _ in UE_CONFIGS]
 
         threads = []
         threads.append(threading.Thread(
-            target=dl_poller, args=(GNB_TX_ADDR, dl_buf), daemon=True,
+            target=dl_poller, args=(GNB_TX_ADDR, dl_bufs), daemon=True,
             name="dl-poller"))
         for i, cfg in enumerate(UE_CONFIGS):
             threads.append(threading.Thread(
-                target=ue_dl_server, args=(cfg, dl_buf), daemon=True,
+                target=ue_dl_server, args=(cfg, dl_bufs[i]), daemon=True,
                 name=f"dl-{cfg['name']}"))
             threads.append(threading.Thread(
                 target=ue_ul_poller, args=(cfg, ul_bufs[i]), daemon=True,

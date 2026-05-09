@@ -130,8 +130,8 @@ def _make_req(ctx, addr, label, timeout_ms=2000):
     return s
 
 
-def dl_poller(gnb_tx_addr, dl_buf):
-    """Tire des IQ depuis le TX REP du gNB → remplit dl_buf partagé.
+def dl_poller(gnb_tx_addr, dl_bufs):
+    """Tire des IQ depuis le TX REP du gNB → fan-out vers dl_bufs (un par UE).
     Reconnecte automatiquement si le gNB redémarre (timeout ZMQ REQ/REP).
     """
     ctx = zmq.Context()
@@ -143,7 +143,8 @@ def dl_poller(gnb_tx_addr, dl_buf):
             iq  = np.frombuffer(raw, dtype=np.complex64).copy() if raw else np.zeros(N_SAMPLES, dtype=np.complex64)
             if len(iq) == 0:
                 iq = np.zeros(N_SAMPLES, dtype=np.complex64)
-            dl_buf.put(iq)
+            for buf in dl_bufs:
+                buf.put(iq.copy())
         except zmq.Again:
             log.warning("[DL/poller] timeout — reconnexion gNB")
             req.close()
@@ -258,20 +259,20 @@ if __name__ == "__main__":
         log.info(f"  UE [{cfg['name']}] tx={cfg['tx_addr']} dl={cfg['rx_bind']} "
                  f"d={cfg['dist_km']}km dop={cfg['doppler_hz']}Hz NF={cfg['snr_db']}dB")
 
-    dl_buf  = IQBuffer(N_SAMPLES)
+    dl_bufs = [IQBuffer(N_SAMPLES) for _ in UE_CONFIGS]
     ul_bufs = [IQBuffer(N_SAMPLES) for _ in UE_CONFIGS]
 
     threads = []
 
-    # DL poller (gNB → shared buffer)
+    # DL poller (gNB → per-UE buffers via fan-out)
     threads.append(threading.Thread(
-        target=dl_poller, args=(GNB_TX_ADDR, dl_buf), daemon=True,
+        target=dl_poller, args=(GNB_TX_ADDR, dl_bufs), daemon=True,
         name="dl-poller"))
 
     # Per-UE DL servers + UL pollers
     for i, cfg in enumerate(UE_CONFIGS):
         threads.append(threading.Thread(
-            target=ue_dl_server, args=(cfg, dl_buf), daemon=True,
+            target=ue_dl_server, args=(cfg, dl_bufs[i]), daemon=True,
             name=f"dl-{cfg['name']}"))
         threads.append(threading.Thread(
             target=ue_ul_poller, args=(cfg, ul_bufs[i]), daemon=True,
