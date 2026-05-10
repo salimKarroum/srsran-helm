@@ -79,10 +79,9 @@ data:
 
         def _fetch_kpis(self):
             time.sleep(KPM_SAMPLE_MS / 1000.0)
-            gnb = self._gnb_id or "gnb"
             try:
                 r = requests.get(
-                    f"{KPM_ADAPTER_URL}/v1/nodeb/{gnb}/kpm", timeout=3)
+                    f"{KPM_ADAPTER_URL}/v1/nodeb/gnb/kpm", timeout=3)
                 if r.status_code != 200:
                     raise ValueError(f"HTTP {r.status_code}")
                 d = r.json()
