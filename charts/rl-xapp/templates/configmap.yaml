@@ -43,8 +43,6 @@ data:
     ALPHA_MMTC  = float(os.getenv("ALPHA_MMTC",  "0.2"))
 
     TOTAL_PRB = int(os.getenv("TOTAL_PRB", "106"))
-    E2MGR_URL = f"http://{RIC_HOST}:{RIC_PORT}"
-    SUBMGR_URL = f"http://{SUBMGR_HOST}:{SUBMGR_PORT}"
 
     def slice_reward(thr_received: float, thr_target: float) -> float:
         return float(max(-1.0, thr_received / max(thr_target, 1e-6) - 1.0))
