@@ -10,7 +10,7 @@ helm_deploy() {
   shift 2
   if helm status "$release" -n "$NAMESPACE" &>/dev/null; then
     echo "[upgrade] $release"
-    helm upgrade "$release" "$chart" -n "$NAMESPACE" "$@"
+    helm upgrade "$release" "$chart" -n "$NAMESPACE" --reset-values "$@"
   else
     echo "[install] $release"
     helm install "$release" "$chart" -n "$NAMESPACE" "$@"
@@ -27,8 +27,8 @@ helm_deploy telegraf     "$CHARTS_DIR/telegraf"
 
 echo ""
 echo "==> Waiting for pods to be ready..."
-kubectl wait --for=condition=Ready pod -l app=srsran-gnb -n "$NAMESPACE" --timeout=120s || true
-kubectl wait --for=condition=Ready pod -l app=srsran-ue  -n "$NAMESPACE" --timeout=120s || true
+kubectl wait --for=condition=Ready pod -l component=gnb -n "$NAMESPACE" --timeout=120s || true
+kubectl wait --for=condition=Ready pod -l component=ue  -n "$NAMESPACE" --timeout=120s || true
 
 echo ""
 echo "==> Pod status:"
