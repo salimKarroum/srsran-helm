@@ -39,6 +39,7 @@ SST_FALLBACK = {"1": "embb", "2": "urllc", "3": "mmtc"}
 _lock = threading.Lock()
 _raw  = {}
 _kpm  = {}
+_ws_ref: list = []  # holds current WebSocketApp instance for sending commands
 
 
 def _slice_name(s_nssai: dict) -> str:
@@ -94,6 +95,8 @@ def _aggregate(data: dict) -> dict:
 
 def _on_open(ws):
     log.info(f"Connecté au gNB WebSocket ({WS_URL})")
+    _ws_ref.clear()
+    _ws_ref.append(ws)
     ws.send(json.dumps({"cmd": "metrics_subscribe"}))
 
 
@@ -113,6 +116,7 @@ def _on_error(_ws, error):
 
 
 def _on_close(_ws, *_):
+    _ws_ref.clear()
     log.info("WebSocket fermé, reconnexion dans 2s...")
 
 
@@ -137,6 +141,40 @@ class KPMHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(payload)))
         self.end_headers()
         self.wfile.write(payload)
+
+    def do_POST(self):
+        path = self.path.rstrip("/")
+        if "/rrm/policy" not in path:
+            self._send_json(404, {"error": "not found"})
+            return
+        length = int(self.headers.get("Content-Length", 0))
+        body = self.rfile.read(length)
+        try:
+            policy = json.loads(body)
+        except json.JSONDecodeError:
+            self._send_json(400, {"error": "invalid JSON"})
+            return
+        sst = int(policy.get("sst", 1))
+        sd  = int(policy.get("sd", 0))
+        ratio = int(policy.get("dedicated_ratio", 33))
+        cmd = {
+            "cmd": "rrm_policy_ratio_set",
+            "policies": {
+                "resourceType": "PRB",
+                "rRMPolicyMemberList": [{"plmn": "00101", "sst": sst, "sd": sd}],
+                "min_prb_policy_ratio": 0,
+                "max_prb_policy_ratio": 100,
+                "dedicated_ratio": ratio,
+            }
+        }
+        if _ws_ref:
+            try:
+                _ws_ref[0].send(json.dumps(cmd))
+                self._send_json(200, {"status": "sent", "cmd": cmd})
+            except Exception as e:
+                self._send_json(503, {"error": str(e)})
+        else:
+            self._send_json(503, {"error": "WebSocket not connected"})
 
     def do_GET(self):
         path = self.path.rstrip("/")

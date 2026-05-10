@@ -27,10 +27,6 @@ data:
     log = logging.getLogger("rl-xapp")
 
     # ── Configuration ────────────────────────────────────────────────────────
-    RIC_HOST        = os.getenv("RIC_HOST",        "osc-ric-e2mgr")
-    RIC_PORT        = os.getenv("RIC_PORT",        "3800")
-    SUBMGR_HOST     = os.getenv("SUBMGR_HOST",     "osc-ric-submgr")
-    SUBMGR_PORT     = os.getenv("SUBMGR_PORT",     "8088")
     KPM_ADAPTER_URL = os.getenv("KPM_ADAPTER_URL", "http://localhost:8080")
     RL_ALGO = os.getenv("RL_ALGO", "PPO").upper()
     _ts_key = "DQN_TOTAL_TIMESTEPS" if RL_ALGO == "DQN" else "PPO_TOTAL_TIMESTEPS"
@@ -70,7 +66,6 @@ data:
                 low=0.0, high=1.0, shape=(6,), dtype=np.float32)
             self.action_space = spaces.Discrete(7)
             self.prb = np.array([40.0, 40.0, 26.0], dtype=np.float32)
-            self._gnb_id = None
 
         def _wait_adapter(self, retries=30, delay=3):
             for i in range(retries):
@@ -102,87 +97,30 @@ data:
                 log.warning(f"_fetch_kpis: {e}")
                 return np.zeros(3, dtype=np.float32)
 
-        def _get_gnb(self):
-            try:
-                r = requests.get(f"{E2MGR_URL}/v1/nodeb/states", timeout=5)
-                nodes = [n["inventoryName"] for n in r.json()
-                         if n.get("connectionStatus") == "CONNECTED"]
-                return nodes[0] if nodes else None
-            except Exception as e:
-                log.warning(f"_get_gnb: {e}")
-                return None
-
-        def _subscribe_kpm(self, gnb_id):
-            payload = {
-                "SubscriptionId": "",
-                "ClientEndpoint": {
-                    "Host": "rl-xapp", "HTTPPort": 8080, "RMRPort": 4560},
-                "Meid": gnb_id,
-                "RANFunctionID": 2,
-                "SubscriptionDetails": [{
-                    "RequestId": {"RequestorId": 1, "InstanceId": 0},
-                    "EventTriggers": [KPM_SAMPLE_MS],
-                    "ActionToBeSetupList": [{
-                        "ActionId": 0,
-                        "ActionType": "report",
-                        "ActionDefinition": {
-                            "StyleType": 4,
-                            "ActionDefinitionFormat4": {
-                                "MatchingUEidList": [],
-                                "SubscriptionInfo": 0
-                            }
-                        }
-                    }]
-                }]
-            }
-            try:
-                r = requests.post(
-                    f"{SUBMGR_URL}/ric/v1/subscriptions",
-                    json=payload, timeout=5)
-                log.info(f"KPM subscription: {r.status_code}")
-            except Exception as e:
-                log.warning(f"_subscribe_kpm: {e}")
-
-        def _send_rc(self, prb_alloc):
-            if not self._gnb_id:
-                return
-            payload = {
-                "RanFunctionId": 3,
-                "RicControlAckRequest": "NO_ACK",
-                "RicControlHeader": {"ControlActionId": 1,
-                                     "UEId": {"GNbUEId": {
-                                         "AMFUENGAPId": 0, "GUAMI": {}}}},
-                "RicControlMessage": {
-                    "StyleType": 2,
-                    "RicControlMessageFormat2": {
-                        "SlicePRBQuota": [
-                            {"SNSSAI": {"SST": 1, "SD": "000001"},
-                             "PRBQuota": int(prb_alloc[0])},
-                            {"SNSSAI": {"SST": 1, "SD": "000002"},
-                             "PRBQuota": int(prb_alloc[1])},
-                            {"SNSSAI": {"SST": 1, "SD": "000003"},
-                             "PRBQuota": int(prb_alloc[2])},
-                        ]
-                    }
-                }
-            }
-            try:
-                requests.post(
-                    f"{E2MGR_URL}/v1/nodeb/{self._gnb_id}/rc-control",
-                    json=payload, timeout=5)
-            except Exception as e:
-                log.warning(f"_send_rc: {e}")
+        def _send_rrm(self, prb_alloc):
+            # Convert absolute PRBs to percentages for rrm_policy_ratio_set
+            slices = [
+                {"sst": 1, "sd": 1, "prb": prb_alloc[0]},  # eMBB
+                {"sst": 1, "sd": 2, "prb": prb_alloc[1]},  # URLLC
+                {"sst": 1, "sd": 3, "prb": prb_alloc[2]},  # mMTC
+            ]
+            for s in slices:
+                ratio = int(round(s["prb"] / TOTAL_PRB * 100))
+                try:
+                    requests.post(
+                        f"{KPM_ADAPTER_URL}/v1/rrm/policy",
+                        json={"sst": s["sst"], "sd": s["sd"],
+                              "dedicated_ratio": ratio},
+                        timeout=3)
+                except Exception as e:
+                    log.warning(f"_send_rrm sst={s['sst']} sd={s['sd']}: {e}")
 
         def reset(self, seed=None, options=None):
             super().reset(seed=seed)
             self.prb = np.array([40.0, 40.0, 26.0], dtype=np.float32)
             self._wait_adapter()
-            self._gnb_id = self._get_gnb()
-            if self._gnb_id:
-                self._subscribe_kpm(self._gnb_id)
-                log.info(f"gNB connecté : {self._gnb_id}")
-            else:
-                log.warning("Aucun gNB connecté au RIC")
+            self._send_rrm(self.prb)
+            log.info("PRB reset envoyé au gNB via kpm-adapter")
             return self._obs(np.zeros(3)), {}
 
         def step(self, action):
@@ -199,7 +137,7 @@ data:
                     self.prb[src] -= self.PRB_STEP
                     self.prb[dst] += self.PRB_STEP
 
-            self._send_rc(self.prb)
+            self._send_rrm(self.prb)
             thr = self._fetch_kpis()
             r = total_reward(thr)
 
