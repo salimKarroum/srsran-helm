@@ -3,16 +3,16 @@
 Channel Emulator — ZMQ REQ/REP bridge compatible srsRAN_Project.
 
 srsRAN_Project ZMQ driver socket types:
-  tx_port → REP socket (binds, envoie IQ sur demande)
-  rx_port → REQ socket (connecte, demande IQ)
+  tx_port → REP socket (binds, sends IQ on request)
+  rx_port → REQ socket (connects, requests IQ)
 
-Ce composant doit tourner en SIDECAR dans le pod srsUE pour partager
-le namespace réseau (IP multus ex. 10.10.3.235) et pouvoir se binder
-sur les ports que le gNB et le srsUE attendent.
+Reactive bridge model (avoids startup deadlock):
+  DL: UE RX REQ requests → CE fetches from gNB TX REP → CE serves UE
+  UL: gNB RX REQ requests → CE fetches from UE TX REP → CE serves gNB
 
 Topologie :
-  gNB TX (REP bind :2000) ←─REQ── [DL thread] ──REP bind :2100─→ UE  RX (REQ :2100)
-  UE  TX (REP bind :2101) ←─REQ── [UL thread] ──REP bind :2001─→ gNB RX (REQ :2001)
+  gNB TX (REP bind :2000) ←─REQ── [DL] ──REP bind :2100─→ UE  RX (REQ :2100)
+  UE  TX (REP bind :2101) ←─REQ── [UL] ──REP bind :2001─→ gNB RX (REQ :2001)
 """
 
 import os, time, threading, logging
@@ -35,6 +35,9 @@ DOPPLER_MAX = float(os.getenv("DOPPLER_MAX_HZ",   "50"))
 NF_DB       = float(os.getenv("NOISE_FIGURE_DB",   "7"))
 FC_GHZ      = float(os.getenv("CARRIER_FREQ_GHZ",  "1.8"))
 RESET_S     = float(os.getenv("RESET_INTERVAL_S",  "5.0"))
+
+# Timeout waiting for source to respond (ms). On timeout, send silence.
+SRC_TIMEOUT_MS = int(os.getenv("SRC_TIMEOUT_MS", "500"))
 
 # ── Canal partagé entre DL et UL ─────────────────────────────────────────
 lock   = threading.Lock()
@@ -67,6 +70,8 @@ def awgn_noise(n, snr_db):
 
 def apply_channel(sig, d_km, dop_hz, sr=23.04e6):
     n   = len(sig)
+    if n == 0:
+        return sig
     a   = fspl_linear(d_km, FC_GHZ)
     out = sig * a
     # single-tap multipath
@@ -82,37 +87,66 @@ def apply_channel(sig, d_km, dop_hz, sr=23.04e6):
     out   += awgn_noise(n, snr_db)
     return out
 
-# ── Bridge REQ/REP ──────────────────────────────────────────────────
-def bridge(src_addr, dst_bind, name, doppler_sign=1.0):
+# ── Reactive Bridge ──────────────────────────────────────────────────
+def bridge(src_addr, dst_bind, name, doppler_sign=1.0, n_silence=23040):
     """
-    - REQ connecte vers src (source REP bind) : tire les IQ.
-    - REP se bind à dst : sert les IQ à la destination quand elle les demande.
+    Reactive bridge: destination requests first, then CE fetches from source.
+
+    dst (REP bind) serves requests from the destination (UE RX or gNB RX).
+    src (REQ connect) fetches IQ from the source (gNB TX or UE TX) on demand.
+
+    If source doesn't respond within SRC_TIMEOUT_MS, silence is sent instead.
+    This allows UL/DL to bootstrap independently.
     """
     ctx = zmq.Context()
 
-    req = ctx.socket(zmq.REQ)
-    req.setsockopt(zmq.LINGER, 0)
-    req.connect(src_addr)
+    src = ctx.socket(zmq.REQ)
+    src.setsockopt(zmq.LINGER, 0)
+    src.setsockopt(zmq.RCVTIMEO, SRC_TIMEOUT_MS)
+    src.connect(src_addr)
 
-    rep = ctx.socket(zmq.REP)
-    rep.setsockopt(zmq.LINGER, 0)
-    rep.bind(dst_bind)
+    dst = ctx.socket(zmq.REP)
+    dst.setsockopt(zmq.LINGER, 0)
+    dst.bind(dst_bind)
 
-    log.info(f"[{name}] REQ → {src_addr}   REP bind {dst_bind}")
+    log.info(f"[{name}] REP bind {dst_bind}  REQ → {src_addr}  (reactive mode)")
+
+    silence = np.zeros(n_silence, dtype=np.complex64).tobytes()
+    src_ok  = True  # track source health for logging
 
     while True:
         try:
             maybe_reset()
             d, dop = get_params()
 
-            req.send(b"")
-            raw = req.recv()
+            # 1. Wait for destination to request samples
+            dst.recv()
 
-            iq     = np.frombuffer(raw, dtype=np.complex64).copy()
-            iq_out = apply_channel(iq, d, doppler_sign * dop).astype(np.complex64)
+            # 2. Fetch from source (with timeout fallback to silence)
+            try:
+                src.send(b"")
+                raw = src.recv()
+                if not src_ok:
+                    log.info(f"[{name}] Source {src_addr} responsive again")
+                    src_ok = True
+                iq = np.frombuffer(raw, dtype=np.complex64).copy()
+                iq_out = apply_channel(iq, d, doppler_sign * dop).astype(np.complex64)
+                payload = iq_out.tobytes()
+            except zmq.Again:
+                # Source not responding — send silence so destination doesn't stall
+                if src_ok:
+                    log.warning(f"[{name}] Source {src_addr} not responding, sending silence")
+                    src_ok = False
+                # Reset REQ socket state after failed recv (must create new socket)
+                src.close()
+                src = ctx.socket(zmq.REQ)
+                src.setsockopt(zmq.LINGER, 0)
+                src.setsockopt(zmq.RCVTIMEO, SRC_TIMEOUT_MS)
+                src.connect(src_addr)
+                payload = silence
 
-            rep.recv()
-            rep.send(iq_out.tobytes())
+            # 3. Respond to destination
+            dst.send(payload)
 
         except Exception as exc:
             log.error(f"[{name}] {exc}")
@@ -120,9 +154,10 @@ def bridge(src_addr, dst_bind, name, doppler_sign=1.0):
 
 
 if __name__ == "__main__":
-    log.info("Channel emulator (REQ/REP) démarré")
-    log.info(f"  DL : {GNB_TX_ADDR} ─► {UE_RX_BIND}")
-    log.info(f"  UL : {UE_TX_ADDR}  ─► {GNB_RX_BIND}")
+    log.info("Channel emulator (reactive REQ/REP) démarré")
+    log.info(f"  DL : {GNB_TX_ADDR} ─► {UE_RX_BIND}  (UE requests first)")
+    log.info(f"  UL : {UE_TX_ADDR}  ─► {GNB_RX_BIND}  (gNB requests first)")
+    log.info(f"  Source timeout: {SRC_TIMEOUT_MS} ms → silence fallback")
 
     threads = [
         threading.Thread(target=bridge,
