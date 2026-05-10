@@ -32,9 +32,10 @@ data:
     SUBMGR_HOST     = os.getenv("SUBMGR_HOST",     "osc-ric-submgr")
     SUBMGR_PORT     = os.getenv("SUBMGR_PORT",     "8088")
     KPM_ADAPTER_URL = os.getenv("KPM_ADAPTER_URL", "http://localhost:8080")
-    TOTAL_TIMESTEPS = int(os.getenv("TOTAL_TIMESTEPS", "1000000"))
-
     RL_ALGO = os.getenv("RL_ALGO", "PPO").upper()
+    _ts_key = "DQN_TOTAL_TIMESTEPS" if RL_ALGO == "DQN" else "PPO_TOTAL_TIMESTEPS"
+    TOTAL_TIMESTEPS = int(os.getenv(_ts_key, "1000000"))
+
     KPM_SAMPLE_MS = int(os.getenv("KPM_SAMPLE_MS", "500"))
 
     EMBB_TARGET  = float(os.getenv("EMBB_TARGET_MBPS",  "50"))

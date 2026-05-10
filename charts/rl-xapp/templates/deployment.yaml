@@ -58,8 +58,10 @@ spec:
               value: "{{ .Values.ppo.gamma }}"
             - name: PPO_CLIP
               value: "{{ .Values.ppo.clipRange }}"
-            - name: TOTAL_TIMESTEPS
+            - name: PPO_TOTAL_TIMESTEPS
               value: "{{ .Values.ppo.totalTimesteps | int }}"
+            - name: DQN_TOTAL_TIMESTEPS
+              value: "{{ .Values.dqn.totalTimesteps | int }}"
             - name: DQN_LR
               value: "{{ .Values.dqn.learningRate }}"
             - name: DQN_BATCH
@@ -93,6 +95,8 @@ spec:
               value: "{{ .Values.kpmAdapter.restPort | int }}"
             - name: SLICE_MAP
               value: '{{ .Values.kpmAdapter.sliceMap }}'
+            - name: TOTAL_PRB
+              value: "106"
           ports:
             - containerPort: {{ .Values.kpmAdapter.restPort | int }}
               name: kpm-rest
