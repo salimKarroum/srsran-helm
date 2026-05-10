@@ -8,7 +8,7 @@ image:
   pullPolicy: IfNotPresent
 
 ueIp: 10.10.3.235
-gnbIp: 10.10.3.231
+gnbIp: 10.10.3.234
 
 zmq:
   tx_port: 2101   # UE TX REP binds here (channel emulator connects REQ to ueIp:2101)

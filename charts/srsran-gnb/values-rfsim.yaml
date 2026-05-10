@@ -20,7 +20,7 @@ start:
   gnb: true
   logs: true
 
-gnbIp: 10.10.3.231
+gnbIp: 10.10.3.234
 
 gnbConfig:
   cu_cp:
@@ -29,23 +29,20 @@ gnbConfig:
     amf:
       addr: 10.10.3.200
       port: 38412
-      bind_addr: 10.10.3.231
+      bind_addr: 10.10.3.234
       supported_tracking_areas:
         - tac: 1
           plmn_list:
             - plmn: "00101"
               tai_slice_support_list:
                 - sst: 1
-                  sd: "000001"
                 - sst: 1
                   sd: "000002"
-                - sst: 1
-                  sd: "000003"
 
   ru_sdr:
     device_driver: zmq
     device_args: >-
-      tx_port=tcp://10.10.3.231:2000,rx_port=tcp://10.10.3.235:2001,base_srate=23.04e6
+      tx_port=tcp://10.10.3.234:2000,rx_port=tcp://10.10.3.235:2001,base_srate=23.04e6
     srate: 23.04
     tx_gain: 75
     rx_gain: 75
@@ -72,11 +69,8 @@ gnbConfig:
       mcs_table: qam64
     slicing:
       - sst: 1
-        sd: "000001"
       - sst: 1
         sd: "000002"
-      - sst: 1
-        sd: "000003"
 
   log:
     filename: /var/log/gnb.log
