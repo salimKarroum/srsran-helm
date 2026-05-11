@@ -96,10 +96,11 @@ data:
 
         def _send_rrm(self, prb_alloc):
             # Convert absolute PRBs to percentages for rrm_policy_ratio_set
+            # SD values are decimal integers: FFFFFF=16777215, 100000=1048576
             slices = [
-                {"sst": 1, "sd": 1, "prb": prb_alloc[0]},  # eMBB
-                {"sst": 1, "sd": 2, "prb": prb_alloc[1]},  # URLLC
-                {"sst": 1, "sd": 3, "prb": prb_alloc[2]},  # mMTC
+                {"sst": 1, "sd": 0xFFFFFF, "prb": prb_alloc[0]},  # eMBB
+                {"sst": 1, "sd": 0x100000, "prb": prb_alloc[1]},  # URLLC
+                {"sst": 1, "sd": 0x200000, "prb": prb_alloc[2]},  # mMTC (placeholder)
             ]
             for s in slices:
                 ratio = int(round(s["prb"] / TOTAL_PRB * 100))

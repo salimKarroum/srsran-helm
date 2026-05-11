@@ -32,7 +32,7 @@ WS_URL    = os.getenv("WS_URL", "srsran-gnb-metrics:8001")
 REST_PORT = int(os.getenv("REST_PORT", "8080"))
 TOTAL_PRB = int(os.getenv("TOTAL_PRB", "106"))
 
-_default_slice_map = {"1:000001": "embb", "1:000002": "urllc", "1:000003": "mmtc"}
+_default_slice_map = {"1:FFFFFF": "embb", "1:16777215": "embb", "1:100000": "urllc", "1:1048576": "urllc"}
 SLICE_MAP = json.loads(os.getenv("SLICE_MAP", json.dumps(_default_slice_map)))
 SST_FALLBACK = {"1": "embb", "2": "urllc", "3": "mmtc"}
 

@@ -22,17 +22,17 @@ kpmSampleMs: 500
 slices:
   embb:
     sst: 1
-    sd: "000001"
+    sd: "FFFFFF"
     targetThroughputMbps: 50
     ueCount: 4
   urllc:
     sst: 1
-    sd: "000002"
+    sd: "100000"
     targetThroughputMbps: 20
     ueCount: 4
   mmtc:
     sst: 1
-    sd: "000003"
+    sd: "200000"
     targetThroughputMbps: 5
     ueCount: 4
 
@@ -66,7 +66,7 @@ kpmAdapter:
     pullPolicy: IfNotPresent
   wsUrl: "srsran-gnb-metrics:8001"
   restPort: 8080
-  sliceMap: '{"1:000001":"embb","1:000002":"urllc","1:000003":"mmtc"}'
+  sliceMap: '{"1:FFFFFF":"embb","1:16777215":"embb","1:100000":"urllc","1:1048576":"urllc"}'
   resources:
     requests:
       cpu: "50m"
