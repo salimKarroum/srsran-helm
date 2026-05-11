@@ -36,7 +36,7 @@ data:
     # Fixed SNR for ZMQ simulation — no real FSPL applied (ZMQ has no AGC)
     SNR_DB         = float(os.getenv("SNR_DB",            "30"))
     RESET_S        = float(os.getenv("RESET_INTERVAL_S",  "5.0"))
-    SRC_TIMEOUT_MS = int(os.getenv("SRC_TIMEOUT_MS",      "500"))
+    SRC_TIMEOUT_MS = int(os.getenv("SRC_TIMEOUT_MS",      "10"))
 
     lock  = threading.Lock()
     state = {
@@ -63,24 +63,14 @@ data:
 
     def apply_channel(sig, d_km, dop_hz, sr=23.04e6):
         """
-        ZMQ simulation channel: no FSPL attenuation (ZMQ has no AGC).
-        Applies multipath, Doppler, and AWGN at fixed SNR_DB.
+        Minimal ZMQ channel: AWGN only at fixed SNR_DB.
+        Multipath/Doppler removed to keep processing well under 1ms/subframe
+        and avoid gNB RF overflow caused by slow CE consumption.
         """
         n = len(sig)
         if n == 0:
             return sig
-        out = sig.copy()
-        # Single-tap multipath
-        td = np.random.randint(0, 6)
-        if td > 0 and n > td:
-            out[td:] += (np.random.uniform(0.3, 0.7)
-                         * np.exp(1j * np.random.uniform(0, 2 * np.pi))
-                         * sig[:-td])
-        # Doppler
-        out *= np.exp(1j * 2 * np.pi * dop_hz * np.arange(n) / sr)
-        # AWGN at fixed SNR (no path loss amplitude scaling)
-        out += awgn_noise(n, SNR_DB)
-        return out
+        return (sig + awgn_noise(n, SNR_DB)).astype(np.complex64)
 
     def bridge(src_addr, dst_bind, name, doppler_sign=1.0, n_silence=23040):
         ctx     = zmq.Context()
