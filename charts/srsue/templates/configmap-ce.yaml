@@ -33,8 +33,8 @@ data:
     D_MIN          = float(os.getenv("DISTANCE_MIN_KM",   "0.5"))
     D_MAX          = float(os.getenv("DISTANCE_MAX_KM",   "2.0"))
     DOPPLER_MAX    = float(os.getenv("DOPPLER_MAX_HZ",    "50"))
-    NF_DB          = float(os.getenv("NOISE_FIGURE_DB",    "7"))
-    FC_GHZ         = float(os.getenv("CARRIER_FREQ_GHZ",  "1.8"))
+    # Fixed SNR for ZMQ simulation — no real FSPL applied (ZMQ has no AGC)
+    SNR_DB         = float(os.getenv("SNR_DB",            "30"))
     RESET_S        = float(os.getenv("RESET_INTERVAL_S",  "5.0"))
     SRC_TIMEOUT_MS = int(os.getenv("SRC_TIMEOUT_MS",      "500"))
 
@@ -57,28 +57,29 @@ data:
         with lock:
             return state["d"], state["doppler"]
 
-    def fspl_linear(d_km, f_ghz):
-        db = 20 * np.log10(d_km) + 20 * np.log10(f_ghz) + 92.45
-        return 10 ** (-db / 20.0)
-
     def awgn_noise(n, snr_db):
         p = 10 ** (-snr_db / 10.0)
         return (np.random.randn(n) + 1j * np.random.randn(n)) * np.sqrt(p / 2)
 
     def apply_channel(sig, d_km, dop_hz, sr=23.04e6):
+        """
+        ZMQ simulation channel: no FSPL attenuation (ZMQ has no AGC).
+        Applies multipath, Doppler, and AWGN at fixed SNR_DB.
+        """
         n = len(sig)
         if n == 0:
             return sig
-        a   = fspl_linear(d_km, FC_GHZ)
-        out = sig * a
-        td  = np.random.randint(0, 6)
+        out = sig.copy()
+        # Single-tap multipath
+        td = np.random.randint(0, 6)
         if td > 0 and n > td:
             out[td:] += (np.random.uniform(0.3, 0.7)
                          * np.exp(1j * np.random.uniform(0, 2 * np.pi))
                          * sig[:-td])
-        out    *= np.exp(1j * 2 * np.pi * dop_hz * np.arange(n) / sr)
-        snr_db  = -20 * np.log10(max(a, 1e-10)) - NF_DB
-        out    += awgn_noise(n, snr_db)
+        # Doppler
+        out *= np.exp(1j * 2 * np.pi * dop_hz * np.arange(n) / sr)
+        # AWGN at fixed SNR (no path loss amplitude scaling)
+        out += awgn_noise(n, SNR_DB)
         return out
 
     def bridge(src_addr, dst_bind, name, doppler_sign=1.0, n_silence=23040):
