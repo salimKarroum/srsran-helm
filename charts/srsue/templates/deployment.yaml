@@ -59,6 +59,10 @@ spec:
               value: "{{ .Values.channelEmulator.dopplerMaxHz }}"
             - name: NOISE_FIGURE_DB
               value: "{{ .Values.channelEmulator.noiseFigureDb }}"
+          volumeMounts:
+            - name: ce-code
+              mountPath: /app/channel_emulator.py
+              subPath: channel_emulator.py
         {{- end }}
       dnsPolicy: ClusterFirst
       restartPolicy: Always
@@ -66,4 +70,8 @@ spec:
         - name: ue-config
           configMap:
             name: {{ include "srsran-ue.fullname" . }}-{{ .Release.Name }}-ue-config
+            defaultMode: 0755
+        - name: ce-code
+          configMap:
+            name: {{ include "srsran-ue.fullname" . }}-{{ .Release.Name }}-ce-code
             defaultMode: 0755
