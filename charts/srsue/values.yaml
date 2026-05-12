@@ -11,8 +11,8 @@ ueIp: 10.10.3.235
 gnbIp: 10.10.3.234
 
 zmq:
-  tx_port: 2101   # UE TX REP binds here (channel emulator connects REQ to ueIp:2101)
-  rx_port: 2100   # UE RX REQ connects here (channel emulator REP binds UE_RX_BIND :2100)
+  tx_port: 2101   # UE TX REP binds here (gNB RX REQ connects to ueIp:2101)
+  rx_port: 2000   # UE RX REQ connects directly to gNB TX REP (gnbIp:2000)
 
 usim:
   opc: 63BFA50EE6523365FF14C1F45F88737D
@@ -22,7 +22,7 @@ usim:
 
 # Channel emulator sidecar (partage le namespace réseau du pod srsUE)
 channelEmulator:
-  enabled: true
+  enabled: false
   image:
     repository: ghcr.io/salimkarroum/channel-emulator
     tag: v1.0
