@@ -36,9 +36,11 @@ NF_DB       = float(os.getenv("NOISE_FIGURE_DB",   "7"))
 FC_GHZ      = float(os.getenv("CARRIER_FREQ_GHZ",  "1.8"))
 RESET_S     = float(os.getenv("RESET_INTERVAL_S",  "5.0"))
 
-# Timeout waiting for source to respond (ms). On timeout, send silence.
-SRC_TIMEOUT_MS = int(os.getenv("SRC_TIMEOUT_MS", "200"))
-DST_TIMEOUT_MS = int(os.getenv("DST_TIMEOUT_MS", "2000"))
+# DL: gNB TX polls ~1s intervals, so timeout must exceed that
+# UL: UE TX responds immediately, short timeout is fine
+DL_SRC_TIMEOUT_MS = int(os.getenv("DL_SRC_TIMEOUT_MS", "1500"))
+UL_SRC_TIMEOUT_MS = int(os.getenv("UL_SRC_TIMEOUT_MS", "200"))
+DST_TIMEOUT_MS    = int(os.getenv("DST_TIMEOUT_MS",     "2000"))
 
 # ── Canal partagé entre DL et UL ─────────────────────────────────────────
 lock   = threading.Lock()
@@ -89,21 +91,21 @@ def apply_channel(sig, d_km, dop_hz, sr=23.04e6):
     return out
 
 # ── Reactive Bridge ──────────────────────────────────────────────────
-def bridge(src_addr, dst_bind, name, doppler_sign=1.0, n_silence=23040):
+def bridge(src_addr, dst_bind, name, doppler_sign=1.0, n_silence=23040, src_timeout_ms=200):
     """
     Reactive bridge: destination requests first, then CE fetches from source.
 
     dst (REP bind) serves requests from the destination (UE RX or gNB RX).
     src (REQ connect) fetches IQ from the source (gNB TX or UE TX) on demand.
 
-    If source doesn't respond within SRC_TIMEOUT_MS, silence is sent instead.
+    If source doesn't respond within src_timeout_ms, silence is sent instead.
     This allows UL/DL to bootstrap independently.
     """
     ctx = zmq.Context()
 
     src = ctx.socket(zmq.REQ)
     src.setsockopt(zmq.LINGER, 0)
-    src.setsockopt(zmq.RCVTIMEO, SRC_TIMEOUT_MS)
+    src.setsockopt(zmq.RCVTIMEO, src_timeout_ms)
     src.connect(src_addr)
 
     dst = ctx.socket(zmq.REP)
@@ -142,7 +144,7 @@ def bridge(src_addr, dst_bind, name, doppler_sign=1.0, n_silence=23040):
                 src.close()
                 src = ctx.socket(zmq.REQ)
                 src.setsockopt(zmq.LINGER, 0)
-                src.setsockopt(zmq.RCVTIMEO, SRC_TIMEOUT_MS)
+                src.setsockopt(zmq.RCVTIMEO, src_timeout_ms)
                 src.connect(src_addr)
                 payload = silence
 
@@ -158,13 +160,15 @@ if __name__ == "__main__":
     log.info("Channel emulator (reactive REQ/REP) démarré")
     log.info(f"  DL : {GNB_TX_ADDR} ─► {UE_RX_BIND}  (UE requests first)")
     log.info(f"  UL : {UE_TX_ADDR}  ─► {GNB_RX_BIND}  (gNB requests first)")
-    log.info(f"  Source timeout: {SRC_TIMEOUT_MS} ms → silence fallback")
+    log.info(f"  DL src timeout: {DL_SRC_TIMEOUT_MS} ms  UL src timeout: {UL_SRC_TIMEOUT_MS} ms")
 
     threads = [
         threading.Thread(target=bridge,
-                         args=(GNB_TX_ADDR, UE_RX_BIND, "DL",  1.0), daemon=True),
+                         args=(GNB_TX_ADDR, UE_RX_BIND, "DL",  1.0),
+                         kwargs={"src_timeout_ms": DL_SRC_TIMEOUT_MS}, daemon=True),
         threading.Thread(target=bridge,
-                         args=(UE_TX_ADDR,  GNB_RX_BIND, "UL", -1.0), daemon=True),
+                         args=(UE_TX_ADDR,  GNB_RX_BIND, "UL", -1.0),
+                         kwargs={"src_timeout_ms": UL_SRC_TIMEOUT_MS}, daemon=True),
     ]
     for t in threads:
         t.start()
