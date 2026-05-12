@@ -162,14 +162,18 @@ class KPMHandler(BaseHTTPRequestHandler):
             return
         sst = int(policy.get("sst", 1))
         sd  = int(policy.get("sd", 0))
+        # All three knobs are accepted independently. dedicated_ratio is the
+        # historical default for the xApp; min/max let us cap a slice hard.
         ratio = int(policy.get("dedicated_ratio", 33))
+        min_r = int(policy.get("min_prb_policy_ratio", 0))
+        max_r = int(policy.get("max_prb_policy_ratio", 100))
         cmd = {
             "cmd": "rrm_policy_ratio_set",
             "policies": {
                 "resourceType": "PRB",
                 "rRMPolicyMemberList": [{"plmn": "00101", "sst": sst, "sd": sd}],
-                "min_prb_policy_ratio": 0,
-                "max_prb_policy_ratio": 100,
+                "min_prb_policy_ratio": min_r,
+                "max_prb_policy_ratio": max_r,
                 "dedicated_ratio": ratio,
             }
         }
