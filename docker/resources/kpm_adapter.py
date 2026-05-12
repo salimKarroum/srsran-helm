@@ -51,49 +51,47 @@ def _slice_name(s_nssai: dict) -> str:
     return SLICE_MAP.get(key) or SST_FALLBACK.get(sst, "unknown")
 
 
-def _aggregate(data: dict) -> dict:
-    slices = defaultdict(lambda: {
-        "dl_brate_sum": 0.0,
-        "sinr_sum":     0.0,
-        "ue_count":     0,
-        "prb_usage":    0.0,
-        "cell_count":   0,
-        "dl_ok":        0,
-        "dl_nok":       0,
-    })
+def _aggregate(state: dict) -> dict:
+    """
+    Aggregate metrics from srsRAN_Project's per-layer JSON messages.
 
-    cells = data.get("cells", {})
-    # srsRAN may emit cells as either dict (keyed by cell_id) or list
-    cell_iter = cells.values() if isinstance(cells, dict) else cells
-    for cell in cell_iter:
-        ue_list = cell.get("ue_list", {})
-        ue_iter = ue_list.values() if isinstance(ue_list, dict) else ue_list
-        for ue in ue_iter:
-            name = _slice_name(ue.get("s_nssai", {}))
-            s = slices[name]
-            s["dl_brate_sum"] += float(ue.get("dl_brate", 0))
-            s["sinr_sum"]     += float(ue.get("pusch_snr_db", 0))
-            s["dl_ok"]        += int(ue.get("dl_nof_ok",  0))
-            s["dl_nok"]       += int(ue.get("dl_nof_nok", 0))
-            s["ue_count"]     += 1
-        cm = cell.get("cell_metrics", {})
-        prb_dl = float(cm.get("dl_prb_usage", 0))
-        for s in slices.values():
-            s["prb_usage"]  += prb_dl
-            s["cell_count"] += 1
+    state is the accumulated _raw dict, where each top-level key is a layer
+    name (cu-up, rlc_metrics, du_low, executor_metrics, ...). We pull the
+    relevant fields and project them onto the eMBB / URLLC / mMTC slices.
 
-    result = {}
-    for slice_name in ("embb", "urllc", "mmtc"):
-        s = slices[slice_name]
-        ue_n   = max(s["ue_count"], 1)
-        cell_n = max(s["cell_count"], 1)
-        dl_total = s["dl_ok"] + s["dl_nok"]
-        result[f"{slice_name}_dl_mbps"]   = round(s["dl_brate_sum"] / 1e6, 3)
-        result[f"{slice_name}_sinr_db"]   = round(s["sinr_sum"] / ue_n, 2)
-        result[f"{slice_name}_prb_usage"] = round(s["prb_usage"] / cell_n, 4)
-        result[f"{slice_name}_ue_count"]  = s["ue_count"]
-        result[f"{slice_name}_bler"]      = round(
-            s["dl_nok"] / dl_total if dl_total > 0 else 0.0, 4)
+    Until per-slice metrics are exposed by srsRAN, every UE is assumed to
+    belong to eMBB (the default slice). URLLC and mMTC remain zero.
+    """
+    cu_up_dl = state.get("cu-up", {}).get("pdcp", {}).get("dl", {}) or {}
+    cu_up_ul = state.get("cu-up", {}).get("pdcp", {}).get("ul", {}) or {}
+    du_low_dl = state.get("du_low", {}).get("dl", {}) or {}
+
+    dl_mbps = float(cu_up_dl.get("average_throughput_mbps", 0.0))
+    ul_mbps = float(cu_up_ul.get("average_throughput_mbps", 0.0))
+    dl_latency_us = float(du_low_dl.get("average_latency_us", 0.0))
+
+    rlc = state.get("rlc_metrics", {}) or {}
+    rlc_tx_bytes = int(rlc.get("tx", {}).get("num_sdu_bytes", 0))
+    rlc_rx_bytes = int(rlc.get("rx", {}).get("num_sdu_bytes", 0))
+    ue_count = 1 if rlc.get("ue_id") is not None else 0
+
+    result = {
+        "embb_dl_mbps":   round(dl_mbps, 3),
+        "embb_ul_mbps":   round(ul_mbps, 3),
+        "embb_sinr_db":   0.0,
+        "embb_prb_usage": 0.0,
+        "embb_ue_count":  ue_count,
+        "embb_bler":      0.0,
+        "embb_dl_latency_us": round(dl_latency_us, 1),
+        "embb_rlc_tx_bytes":  rlc_tx_bytes,
+        "embb_rlc_rx_bytes":  rlc_rx_bytes,
+    }
+    for slice_name in ("urllc", "mmtc"):
+        result[f"{slice_name}_dl_mbps"]   = 0.0
+        result[f"{slice_name}_sinr_db"]   = 0.0
+        result[f"{slice_name}_prb_usage"] = 0.0
+        result[f"{slice_name}_ue_count"]  = 0
+        result[f"{slice_name}_bler"]      = 0.0
     return result
 
 
@@ -109,9 +107,13 @@ def _on_message(_ws, message):
         data = json.loads(message)
         if "cmd" in data:
             return
-        kpm = _aggregate(data)
+        # srsRAN_Project emits one message per layer (cu-up, rlc_metrics, du_low,
+        # executor_metrics, ...). Merge them into _raw instead of overwriting,
+        # so _aggregate can see the latest value of every layer.
         with _lock:
-            _raw.clear(); _raw.update(data)
+            for k, v in data.items():
+                _raw[k] = v
+            kpm = _aggregate(_raw)
             _kpm.clear(); _kpm.update(kpm)
 
 

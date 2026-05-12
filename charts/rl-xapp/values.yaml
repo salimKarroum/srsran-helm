@@ -23,8 +23,8 @@ slices:
   embb:
     sst: 1
     sd: "FFFFFF"
-    targetThroughputMbps: 50
-    ueCount: 4
+    targetThroughputMbps: 5
+    ueCount: 1
   urllc:
     sst: 1
     sd: "100000"
@@ -37,9 +37,9 @@ slices:
     ueCount: 4
 
 alpha:
-  embb: 0.3
-  urllc: 0.5
-  mmtc: 0.2
+  embb: 1.0
+  urllc: 0.0
+  mmtc: 0.0
 
 ppo:
   learningRate: 0.0003
