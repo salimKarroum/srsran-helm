@@ -36,9 +36,9 @@ gnbConfig:
             - plmn: "00101"
               tai_slice_support_list:
                 - sst: 1
-                  sd: "FFFFFF"
+                  sd: 16777215
                 - sst: 1
-                  sd: "100000"
+                  sd: 1048576
 
   ru_sdr:
     device_driver: zmq
@@ -70,9 +70,9 @@ gnbConfig:
       mcs_table: qam64
     slicing:
       - sst: 1
-        sd: "FFFFFF"
+        sd: 16777215
       - sst: 1
-        sd: "100000"
+        sd: 1048576
 
   log:
     filename: /var/log/gnb.log
