@@ -39,8 +39,6 @@ gnbConfig:
                   sd: 16777215   # eMBB  (FFFFFF)
                 - sst: 1
                   sd: 1048576    # URLLC (100000)
-                - sst: 1
-                  sd: 2097152    # mMTC  (200000)
 
   ru_sdr:
     device_driver: zmq
@@ -75,13 +73,14 @@ gnbConfig:
         sd: 16777215   # eMBB  (FFFFFF)
       - sst: 1
         sd: 1048576    # URLLC (100000)
-      - sst: 1
-        sd: 2097152    # mMTC  (200000)
 
   log:
     filename: /var/log/gnb.log
     all_level: warning
     config_level: debug
+    mac_level: info       # voir cell start, scheduler decisions
+    rrc_level: info       # voir RRC connexion
+    ngap_level: info      # voir handshake AMF
 
   metrics:
     enable_log: false
