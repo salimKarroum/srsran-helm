@@ -121,7 +121,7 @@ data:
         # Values are injected by Helm during deployment
         cfg = UE_TEMPLATE.format(
             tx_port=f"tcp://*:{{ .Values.zmq.tx_port }}",
-            rx_port=f"tcp://{{ .Values.gnbIp }}:{{ .Values.zmq.rx_port }}",
+            rx_port=f"tcp://127.0.0.1:{{ .Values.zmq.rx_port }}",
             log_file=os.path.join(output_directory, f"ue{ue_number}.log"),
             opc="{{ .Values.usim.opc }}",
             k="{{ .Values.usim.k }}",
