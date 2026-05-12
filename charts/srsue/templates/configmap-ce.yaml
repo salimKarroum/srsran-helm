@@ -36,7 +36,8 @@ data:
     # Fixed SNR for ZMQ simulation — no real FSPL applied (ZMQ has no AGC)
     SNR_DB         = float(os.getenv("SNR_DB",            "30"))
     RESET_S        = float(os.getenv("RESET_INTERVAL_S",  "5.0"))
-    SRC_TIMEOUT_MS = int(os.getenv("SRC_TIMEOUT_MS",      "10"))
+    SRC_TIMEOUT_MS = int(os.getenv("SRC_TIMEOUT_MS",      "200"))
+    DST_TIMEOUT_MS = int(os.getenv("DST_TIMEOUT_MS",      "2000"))
 
     lock  = threading.Lock()
     state = {
@@ -87,6 +88,7 @@ data:
         src = make_src()
         dst = ctx.socket(zmq.REP)
         dst.setsockopt(zmq.LINGER, 0)
+        dst.setsockopt(zmq.RCVTIMEO, DST_TIMEOUT_MS)
         dst.bind(dst_bind)
 
         log.info(f"[{name}] REP bind {dst_bind}  REQ -> {src_addr}  (reactive mode)")
@@ -96,7 +98,10 @@ data:
                 maybe_reset()
                 d, dop = get_params()
 
-                dst.recv()
+                try:
+                    dst.recv()
+                except zmq.Again:
+                    continue
 
                 try:
                     src.send(b"")

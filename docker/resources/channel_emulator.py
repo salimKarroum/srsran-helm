@@ -37,7 +37,8 @@ FC_GHZ      = float(os.getenv("CARRIER_FREQ_GHZ",  "1.8"))
 RESET_S     = float(os.getenv("RESET_INTERVAL_S",  "5.0"))
 
 # Timeout waiting for source to respond (ms). On timeout, send silence.
-SRC_TIMEOUT_MS = int(os.getenv("SRC_TIMEOUT_MS", "10"))
+SRC_TIMEOUT_MS = int(os.getenv("SRC_TIMEOUT_MS", "200"))
+DST_TIMEOUT_MS = int(os.getenv("DST_TIMEOUT_MS", "2000"))
 
 # ── Canal partagé entre DL et UL ─────────────────────────────────────────
 lock   = threading.Lock()
