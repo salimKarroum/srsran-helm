@@ -15,9 +15,9 @@ zmq:
   rx_port: 2000   # UE RX REQ connects directly to gNB TX REP (gnbIp:2000)
 
 usim:
-  opc: 63BFA50EE6523365FF14C1F45F88737D
-  k: 00112233445566778899aabbccddeeff
-  imsi: "001010123456780"
+  opc: C42449363BBAD02B66D16BC975D77CC1
+  k: fec86ba6eb707ed08905757b1bb44b8f
+  imsi: "001010000000001"
   apn: internet
 
 # Channel emulator sidecar (partage le namespace réseau du pod srsUE)
