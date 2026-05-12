@@ -9,14 +9,25 @@ data:
   channel_emulator.py: |
     #!/usr/bin/env python3
     """
-    Channel Emulator — reactive ZMQ REQ/REP bridge.
+    Channel Emulator — DECOUPLED architecture (Phase 1: 1 UE).
 
-    Reactive bridge: destination requests first, then CE fetches from source.
-    DL: UE RX REQ requests -> CE fetches from gNB TX REP -> CE serves UE
-    UL: gNB RX REQ requests -> CE fetches from UE TX REP -> CE serves gNB
+    Problem with synchronous bridge: gNB UL requires <1ms response, but a
+    reactive bridge (recv gNB REQ -> ask UE -> reply) takes >1ms round-trip,
+    causing RF overflow at the gNB. Furthermore, at boot the UE isn't up, so
+    the bridge times out (200ms) and the gNB overflows immediately.
 
-    If source doesn't respond within SRC_TIMEOUT_MS, silence is sent.
-    This breaks the startup deadlock (UE TX REP doesn't respond before attachment).
+    Decoupled design:
+      DL (gNB -> UE):
+        - 1 fetcher thread: REQ-REP loop pulling from gNB, stores in dl_buffer
+        - 1 server thread: REP bind on UE_RX_BIND, serves latest dl_buffer
+      UL (UE -> gNB):
+        - 1 fetcher thread: REQ-REP loop pulling from UE, stores in ul_buffer
+        - 1 server thread: REP bind on GNB_RX_BIND, serves latest ul_buffer
+                           (this is the CRITICAL thread — must reply in <1ms)
+
+    Before either source is up, the corresponding buffer holds silence
+    (zeros, 1 subframe = 23040 complex64 samples) so the server always has
+    something to send.
     """
     import os, time, threading, logging
     import numpy as np
@@ -26,124 +37,108 @@ data:
                         format="%(asctime)s %(levelname)s %(message)s")
     log = logging.getLogger("channel-emulator")
 
-    GNB_TX_ADDR       = os.getenv("GNB_TX_ADDR",         "tcp://10.10.3.234:2000")
-    UE_TX_ADDR        = os.getenv("UE_TX_ADDR",          "tcp://127.0.0.1:2101")
-    GNB_RX_BIND       = os.getenv("GNB_RX_BIND",         "tcp://0.0.0.0:2001")
-    UE_RX_BIND        = os.getenv("UE_RX_BIND",          "tcp://0.0.0.0:2100")
-    D_MIN             = float(os.getenv("DISTANCE_MIN_KM",    "0.5"))
-    D_MAX             = float(os.getenv("DISTANCE_MAX_KM",    "2.0"))
-    DOPPLER_MAX       = float(os.getenv("DOPPLER_MAX_HZ",     "50"))
-    # Fixed SNR for ZMQ simulation — no real FSPL applied (ZMQ has no AGC)
-    SNR_DB            = float(os.getenv("SNR_DB",             "30"))
-    RESET_S           = float(os.getenv("RESET_INTERVAL_S",   "5.0"))
-    # DL: gNB TX polls ~1s intervals, so timeout must exceed that
-    # UL: UE TX responds immediately, short timeout is fine
-    DL_SRC_TIMEOUT_MS = int(os.getenv("DL_SRC_TIMEOUT_MS",   "1500"))
-    UL_SRC_TIMEOUT_MS = int(os.getenv("UL_SRC_TIMEOUT_MS",   "200"))
-    DST_TIMEOUT_MS    = int(os.getenv("DST_TIMEOUT_MS",       "2000"))
+    GNB_TX_ADDR    = os.getenv("GNB_TX_ADDR",     "tcp://10.10.3.234:2000")
+    UE_TX_ADDR     = os.getenv("UE_TX_ADDR",      "tcp://127.0.0.1:2101")
+    GNB_RX_BIND    = os.getenv("GNB_RX_BIND",     "tcp://0.0.0.0:2001")
+    UE_RX_BIND     = os.getenv("UE_RX_BIND",      "tcp://0.0.0.0:2100")
+    SNR_DB         = float(os.getenv("SNR_DB",    "30"))
+    SUBFRAME_SAMP  = int(os.getenv("SUBFRAME_SAMPLES", "23040"))
+    FETCH_TIMEOUT_MS = int(os.getenv("FETCH_TIMEOUT_MS", "50"))
 
-    lock  = threading.Lock()
-    state = {
-        "d":       np.random.uniform(D_MIN, D_MAX),
-        "doppler": np.random.uniform(-DOPPLER_MAX, DOPPLER_MAX),
-        "ts":      time.time(),
-    }
+    SILENCE_BYTES = np.zeros(SUBFRAME_SAMP, dtype=np.complex64).tobytes()
 
-    def maybe_reset():
-        if time.time() - state["ts"] > RESET_S:
-            with lock:
-                state["d"]       = np.random.uniform(D_MIN, D_MAX)
-                state["doppler"] = np.random.uniform(-DOPPLER_MAX, DOPPLER_MAX)
-                state["ts"]      = time.time()
-            log.info(f"Canal reset -> d={state['d']:.2f} km  dop={state['doppler']:.1f} Hz")
+    dl_buffer = SILENCE_BYTES
+    ul_buffer = SILENCE_BYTES
+    dl_lock = threading.Lock()
+    ul_lock = threading.Lock()
 
-    def get_params():
-        with lock:
-            return state["d"], state["doppler"]
+    ctx = zmq.Context()
 
-    def awgn_noise(n, snr_db):
-        p = 10 ** (-snr_db / 10.0)
-        return (np.random.randn(n) + 1j * np.random.randn(n)) * np.sqrt(p / 2)
-
-    def apply_channel(sig, d_km, dop_hz, sr=23.04e6):
-        """
-        Minimal ZMQ channel: AWGN only at fixed SNR_DB.
-        Multipath/Doppler removed to keep processing well under 1ms/subframe
-        and avoid gNB RF overflow caused by slow CE consumption.
-        """
+    def awgn(payload_bytes, snr_db):
+        if not payload_bytes:
+            return payload_bytes
+        sig = np.frombuffer(payload_bytes, dtype=np.complex64).copy()
         n = len(sig)
         if n == 0:
-            return sig
-        return (sig + awgn_noise(n, SNR_DB)).astype(np.complex64)
+            return payload_bytes
+        p = 10 ** (-snr_db / 10.0)
+        noise = (np.random.randn(n) + 1j * np.random.randn(n)) * np.sqrt(p / 2)
+        return (sig + noise).astype(np.complex64).tobytes()
 
-    def bridge(src_addr, dst_bind, name, doppler_sign=1.0, n_silence=23040, src_timeout_ms=200):
-        ctx     = zmq.Context()
-        silence = np.zeros(n_silence, dtype=np.complex64).tobytes()
-        src_ok  = True
+    def make_req(addr):
+        s = ctx.socket(zmq.REQ)
+        s.setsockopt(zmq.LINGER, 0)
+        s.setsockopt(zmq.RCVTIMEO, FETCH_TIMEOUT_MS)
+        s.connect(addr)
+        return s
 
-        def make_src():
-            s = ctx.socket(zmq.REQ)
-            s.setsockopt(zmq.LINGER, 0)
-            s.setsockopt(zmq.RCVTIMEO, src_timeout_ms)
-            s.connect(src_addr)
-            return s
-
-        src = make_src()
-        dst = ctx.socket(zmq.REP)
-        dst.setsockopt(zmq.LINGER, 0)
-        dst.setsockopt(zmq.RCVTIMEO, DST_TIMEOUT_MS)
-        dst.bind(dst_bind)
-
-        log.info(f"[{name}] REP bind {dst_bind}  REQ -> {src_addr}  (reactive mode)")
-
+    def fetcher(name, addr, lock, set_buffer):
+        """Continuously REQ samples from `addr`, store into the shared buffer."""
+        s = make_req(addr)
+        log.info(f"[{name}-fetch] connected to {addr}")
+        last_log = 0
+        ok = True
         while True:
             try:
-                maybe_reset()
-                d, dop = get_params()
+                s.send(b"")
+                data = s.recv()
+                with lock:
+                    set_buffer(data)
+                if not ok:
+                    log.info(f"[{name}-fetch] {addr} responsive again ({len(data)} B)")
+                    ok = True
+            except zmq.Again:
+                # source silent — recreate socket (REQ state corrupted after send w/o recv)
+                if ok and time.time() - last_log > 5:
+                    log.warning(f"[{name}-fetch] {addr} not responding")
+                    last_log = time.time()
+                    ok = False
+                s.close()
+                s = make_req(addr)
+            except Exception as e:
+                log.error(f"[{name}-fetch] {e}")
+                time.sleep(0.01)
 
-                try:
-                    dst.recv()
-                except zmq.Again:
-                    continue
+    def dl_set(data):
+        global dl_buffer
+        dl_buffer = data
 
-                try:
-                    src.send(b"")
-                    raw = src.recv()
-                    if not src_ok:
-                        log.info(f"[{name}] Source {src_addr} responsive again")
-                        src_ok = True
-                    iq     = np.frombuffer(raw, dtype=np.complex64).copy()
-                    iq_out = apply_channel(iq, d, doppler_sign * dop).astype(np.complex64)
-                    payload = iq_out.tobytes()
-                except zmq.Again:
-                    if src_ok:
-                        log.warning(f"[{name}] Source {src_addr} not responding, sending silence")
-                        src_ok = False
-                    src.close()
-                    src = make_src()
-                    payload = silence
+    def ul_set(data):
+        global ul_buffer
+        ul_buffer = data
 
-                dst.send(payload)
-
-            except Exception as exc:
-                log.error(f"[{name}] {exc}")
+    def server(name, bind_addr, lock, get_buffer):
+        """REP bind; on each REQ from gNB/UE, reply immediately with latest buffer."""
+        s = ctx.socket(zmq.REP)
+        s.setsockopt(zmq.LINGER, 0)
+        s.bind(bind_addr)
+        log.info(f"[{name}-srv] bound {bind_addr}")
+        while True:
+            try:
+                s.recv()
+                with lock:
+                    buf = get_buffer()
+                s.send(awgn(buf, SNR_DB))
+            except Exception as e:
+                log.error(f"[{name}-srv] {e}")
                 time.sleep(0.01)
 
     if __name__ == "__main__":
-        log.info("Channel emulator (reactive REQ/REP) demarre")
-        log.info(f"  DL : {GNB_TX_ADDR} -> {UE_RX_BIND}  (UE requests first)")
-        log.info(f"  UL : {UE_TX_ADDR}  -> {GNB_RX_BIND}  (gNB requests first)")
-        log.info(f"  DL src timeout: {DL_SRC_TIMEOUT_MS} ms  UL src timeout: {UL_SRC_TIMEOUT_MS} ms")
+        log.info(f"Channel emulator (DECOUPLED) — SNR={SNR_DB}dB")
+        log.info(f"  DL : fetch {GNB_TX_ADDR} -> serve {UE_RX_BIND}")
+        log.info(f"  UL : fetch {UE_TX_ADDR}  -> serve {GNB_RX_BIND}")
         threads = [
-            threading.Thread(target=bridge,
-                             args=(GNB_TX_ADDR, UE_RX_BIND, "DL",  1.0),
-                             kwargs={"src_timeout_ms": DL_SRC_TIMEOUT_MS}, daemon=True),
-            threading.Thread(target=bridge,
-                             args=(UE_TX_ADDR,  GNB_RX_BIND, "UL", -1.0),
-                             kwargs={"src_timeout_ms": UL_SRC_TIMEOUT_MS}, daemon=True),
+            threading.Thread(target=fetcher,
+                             args=("DL", GNB_TX_ADDR, dl_lock, dl_set), daemon=True),
+            threading.Thread(target=fetcher,
+                             args=("UL", UE_TX_ADDR, ul_lock, ul_set), daemon=True),
+            threading.Thread(target=server,
+                             args=("DL", UE_RX_BIND, dl_lock, lambda: dl_buffer), daemon=True),
+            threading.Thread(target=server,
+                             args=("UL", GNB_RX_BIND, ul_lock, lambda: ul_buffer), daemon=True),
         ]
         for t in threads:
             t.start()
-        for t in threads:
-            t.join()
+        while True:
+            time.sleep(60)
 {{- end }}
