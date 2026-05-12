@@ -88,6 +88,11 @@ spec:
         - name: kpm-adapter
           image: "{{ .Values.kpmAdapter.image.repository }}:{{ .Values.kpmAdapter.image.tag }}"
           imagePullPolicy: {{ .Values.kpmAdapter.image.pullPolicy }}
+          command: ["python3", "/app-kpm/kpm_adapter.py"]
+          volumeMounts:
+            - name: kpm-code
+              mountPath: /app-kpm/kpm_adapter.py
+              subPath: kpm_adapter.py
           env:
             - name: WS_URL
               value: "{{ .Values.kpmAdapter.wsUrl }}"
@@ -118,3 +123,6 @@ spec:
         - name: xapp-code
           configMap:
             name: {{ include "rl-xapp.fullname" . }}-code
+        - name: kpm-code
+          configMap:
+            name: {{ include "rl-xapp.fullname" . }}-kpm-code
