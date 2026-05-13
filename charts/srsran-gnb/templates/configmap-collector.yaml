@@ -1,0 +1,120 @@
+{{- if .Values.collector.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gnb-collector-script
+  labels:
+    {{- include "srsran-gnb.labels" . | nindent 4 }}
+data:
+  collector.py: |
+    #!/usr/bin/env python3
+    """
+    Metrics collector for srsRAN gNB JSON metrics.
+
+    Listens for JSON metrics on UDP and writes:
+      - <out>/gnb_metrics.jsonl : raw line-per-message (lossless)
+      - <out>/gnb_metrics.csv   : best-effort flattened per-UE rows
+    """
+    import csv, json, os, socket, time
+    from pathlib import Path
+
+    PORT     = int(os.getenv("METRICS_PORT", "55555"))
+    OUT_DIR  = Path(os.getenv("METRICS_OUT", "/data"))
+    JSONL    = OUT_DIR / "gnb_metrics.jsonl"
+    CSV_PATH = OUT_DIR / "gnb_metrics.csv"
+
+    CSV_FIELDS = [
+        "timestamp", "pci", "rnti",
+        "dl_brate_kbps", "ul_brate_kbps",
+        "dl_mcs", "ul_mcs",
+        "dl_bler", "ul_bler",
+        "pusch_snr_db",
+        "n_ues",
+    ]
+
+    def find_ue_list(obj):
+        if isinstance(obj, dict):
+            for k, v in obj.items():
+                if k in ("ue_list", "ues") and isinstance(v, list):
+                    return v
+                r = find_ue_list(v)
+                if r is not None:
+                    return r
+        elif isinstance(obj, list):
+            for item in obj:
+                r = find_ue_list(item)
+                if r is not None:
+                    return r
+        return None
+
+    def get(d, *keys):
+        for k in keys:
+            cur = d
+            for part in k.split("."):
+                if not isinstance(cur, dict):
+                    cur = None
+                    break
+                cur = cur.get(part)
+            if cur is not None:
+                return cur
+        return None
+
+    def flatten(msg):
+        ts = msg.get("timestamp") or time.time()
+        ues = find_ue_list(msg) or []
+        n = len(ues)
+        if not ues:
+            yield {"timestamp": ts, "n_ues": 0}
+            return
+        for ue in ues:
+            yield {
+                "timestamp":     ts,
+                "pci":           get(ue, "pci"),
+                "rnti":          get(ue, "rnti"),
+                "dl_brate_kbps": get(ue, "dl_brate_kbps", "dl.brate_kbps"),
+                "ul_brate_kbps": get(ue, "ul_brate_kbps", "ul.brate_kbps"),
+                "dl_mcs":        get(ue, "dl_mcs",        "dl.mcs"),
+                "ul_mcs":        get(ue, "ul_mcs",        "ul.mcs"),
+                "dl_bler":       get(ue, "dl_bler",       "dl.bler"),
+                "ul_bler":       get(ue, "ul_bler",       "ul.bler"),
+                "pusch_snr_db":  get(ue, "pusch_snr_db",  "ul.pusch_snr_db"),
+                "n_ues":         n,
+            }
+
+    def main():
+        OUT_DIR.mkdir(parents=True, exist_ok=True)
+        jsonl_f = open(JSONL, "a")
+        new_csv = not CSV_PATH.exists()
+        csv_f = open(CSV_PATH, "a", newline="")
+        writer = csv.DictWriter(csv_f, fieldnames=CSV_FIELDS)
+        if new_csv:
+            writer.writeheader()
+            csv_f.flush()
+
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.bind(("0.0.0.0", PORT))
+        print(f"metrics-collector: listening UDP :{PORT} -> {OUT_DIR}", flush=True)
+
+        n = 0
+        while True:
+            data, _ = sock.recvfrom(65535)
+            line = data.decode(errors="replace").strip()
+            if not line:
+                continue
+            jsonl_f.write(line + "\n")
+            jsonl_f.flush()
+            try:
+                msg = json.loads(line)
+            except Exception as e:
+                print(f"parse error: {e}", flush=True)
+                continue
+            for row in flatten(msg):
+                writer.writerow(row)
+            csv_f.flush()
+            n += 1
+            if n % 60 == 0:
+                print(f"metrics-collector: {n} messages persisted", flush=True)
+
+    if __name__ == "__main__":
+        main()
+{{- end }}

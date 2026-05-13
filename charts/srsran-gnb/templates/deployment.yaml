@@ -63,6 +63,25 @@ spec:
             - mountPath: /var/log/
               name: varlog
       {{- end }}
+      {{- if .Values.collector.enabled }}
+        - name: metrics-collector
+          image: {{ .Values.collector.image | default "python:3.11-slim" | quote }}
+          command: ["python3", "/scripts/collector.py"]
+          env:
+            - name: METRICS_PORT
+              value: {{ .Values.collector.port | default 55555 | quote }}
+            - name: METRICS_OUT
+              value: "/data"
+          ports:
+            - name: udp-metrics
+              containerPort: {{ .Values.collector.port | default 55555 }}
+              protocol: UDP
+          volumeMounts:
+            - name: collector-scripts
+              mountPath: /scripts
+            - name: host-mount
+              mountPath: /data
+      {{- end }}
       dnsPolicy: ClusterFirst
       restartPolicy: Always
       {{- if .Values.nodeName }}
@@ -85,3 +104,12 @@ spec:
           hostPath:
             path: /mnt/
             type: Directory
+        {{- if .Values.collector.enabled }}
+        - name: collector-scripts
+          configMap:
+            name: gnb-collector-script
+            defaultMode: 0755
+            items:
+              - key: collector.py
+                path: collector.py
+        {{- end }}

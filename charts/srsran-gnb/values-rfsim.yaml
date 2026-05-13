@@ -86,6 +86,8 @@ gnbConfig:
     enable_log: false
     autostart_stdout_metrics: true
     enable_json: true
+    addr: 127.0.0.1
+    port: 55555
     layers:
       enable_app_usage: true
       enable_e1ap: true
@@ -107,3 +109,10 @@ gnbConfig:
     bind_addr: 0.0.0.0
     enabled: true
     port: 8001
+
+# Metrics collector sidecar: listens UDP on collector.port and writes
+# /mnt/gnb_metrics.{csv,jsonl} on the host. Toggle with collector.enabled.
+collector:
+  enabled: true
+  image: python:3.11-slim
+  port: 55555
