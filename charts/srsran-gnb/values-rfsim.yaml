@@ -86,8 +86,6 @@ gnbConfig:
     enable_log: false
     autostart_stdout_metrics: true
     enable_json: true
-    addr: 127.0.0.1
-    port: 55555
     layers:
       enable_app_usage: true
       enable_e1ap: true
