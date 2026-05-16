@@ -63,7 +63,7 @@ spec:
             - mountPath: /var/log/
               name: varlog
       {{- end }}
-      {{- if .Values.collector.enabled }}
+      {{- if and .Values.collector .Values.collector.enabled }}
         - name: metrics-collector
           image: {{ .Values.collector.image | default "python:3.11-slim" | quote }}
           command: ["python3", "/scripts/collector.py"]
@@ -104,7 +104,7 @@ spec:
           hostPath:
             path: /mnt/
             type: Directory
-        {{- if .Values.collector.enabled }}
+        {{- if and .Values.collector .Values.collector.enabled }}
         - name: collector-scripts
           configMap:
             name: gnb-collector-script
