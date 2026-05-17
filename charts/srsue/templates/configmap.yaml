@@ -10,54 +10,51 @@ data:
 
     echo "--- Starting UE Configuration Script ---"
 
-    # 1. Generate the configuration file using the Python script
-    python3 /srsran/config/generate_ue_conf.py $1 /tmp/
+    UE_NUM=${1:-1}
+    SRSUE=/opt/srsRAN_4G/build/srsue/src/srsue
+    CONF=/tmp/ue_${UE_NUM}.conf
 
-    # 2. Start srsUE in the background
-    echo "Starting srsUE process..."
-    /opt/srsRAN_4G/build/srsue/src/srsue /tmp/ue_$1.conf > /proc/1/fd/1 2>&1 &
-    UE_PID=$!
+    # Kill any stale srsue left from a previous run
+    pkill -9 -f "$SRSUE" 2>/dev/null && sleep 1
 
-    # 3. Wait for the tun_srsue interface to be created and assigned an IP
-    # Timeout is set to 100 seconds (50 iterations * 2s)
-    echo "Waiting for tun_srsue interface to come up..."
-    for i in {1..50}; do
-      if ip addr show tun_srsue > /dev/null 2>&1; then
-        UE_IP=$(ip addr show tun_srsue | grep 'inet ' | awk '{print $2}')
-        if [ ! -z "$UE_IP" ]; then
-          echo "✅ Interface tun_srsue is UP with IP: $UE_IP"
-          
-          # --- APPLY NETWORK SETTINGS ---
-          echo "Applying network configuration changes..."
+    # Generate the configuration file
+    python3 /srsran/config/generate_ue_conf.py $UE_NUM /tmp/
 
-          # Set MTU to 1400 to avoid fragmentation (standard for 5G tunnels)
-          ip link set dev tun_srsue mtu 1400
-          echo "Current MTU: $(cat /sys/class/net/tun_srsue/mtu)"
+    apply_net_config() {
+      local TUN=tun_srsue
+      ip link set dev $TUN mtu 1400
+      if ip route show 12.1.0.0/24 dev $TUN > /dev/null 2>&1; then
+        ip route del 12.1.0.0/24 dev $TUN
+        ip route add 12.1.0.0/16 dev $TUN
+      fi
+      if ip route show 14.1.0.0/24 dev $TUN > /dev/null 2>&1; then
+        ip route del 14.1.0.0/24 dev $TUN
+        ip route add 14.1.0.0/16 dev $TUN
+      fi
+      echo "NET: tun up $(ip addr show $TUN | grep 'inet ' | awk '{print $2}'), routes:"
+      ip route
+    }
 
-          # Change routes from /24 to /16 to broaden the reach
-          # We check if the /24 route exists before deleting and replacing it
-          if ip route show 12.1.0.0/24 dev tun_srsue > /dev/null 2>&1; then
-            ip route del 12.1.0.0/24 dev tun_srsue
-            ip route add 12.1.0.0/16 dev tun_srsue
-            echo "Route 12.1.0.0 modified to /16"
-          fi
+    # Loop: restart srsue whenever it exits (handles gNB restarts which corrupt ZMQ REQ state)
+    while true; do
+      echo "$(date) Starting srsue (UE ${UE_NUM})..."
+      $SRSUE $CONF > /proc/1/fd/1 2>&1 &
+      UE_PID=$!
 
-          if ip route show 14.1.0.0/24 dev tun_srsue > /dev/null 2>&1; then
-            ip route del 14.1.0.0/24 dev tun_srsue
-            ip route add 14.1.0.0/16 dev tun_srsue
-            echo "Route 14.1.0.0 modified to /16"
-          fi
-
-          echo "--- Final Routing Table ---"
-          ip route
+      # Wait up to 100s for tun interface
+      for i in $(seq 1 50); do
+        if ip addr show tun_srsue 2>/dev/null | grep -q 'inet '; then
+          apply_net_config
           break
         fi
-      fi
-      sleep 2
-    done
+        sleep 2
+      done
 
-    # Maintain the container alive as long as srsUE is running
-    wait $UE_PID
+      wait $UE_PID
+      EXIT_CODE=$?
+      echo "$(date) srsue exited (code $EXIT_CODE), restarting in 5s..."
+      sleep 5
+    done
 
   generate_ue_conf.py: |
     #!/usr/bin/env python3
