@@ -23,7 +23,7 @@ spec:
           command: ["/bin/bash", "-c"]
           args:
           {{- if .Values.start.gnb }}
-            - /usr/local/bin/gnb -c /srsran/config/srsran-gnb.yaml
+            - /usr/local/bin/gnb -c /srsran/config/srsran-gnb.yaml 2>&1 | tee /var/log/gnb_stdout.log
           {{- else }}
             - sleep infinity
           {{- end }}
@@ -68,19 +68,17 @@ spec:
           image: {{ .Values.collector.image | default "python:3.11-slim" | quote }}
           command: ["python3", "/scripts/collector.py"]
           env:
-            - name: METRICS_PORT
-              value: {{ .Values.collector.port | default 55555 | quote }}
+            - name: METRICS_IN
+              value: "/var/log/gnb_stdout.log"
             - name: METRICS_OUT
               value: "/data"
-          ports:
-            - name: udp-metrics
-              containerPort: {{ .Values.collector.port | default 55555 }}
-              protocol: UDP
           volumeMounts:
             - name: collector-scripts
               mountPath: /scripts
             - name: host-mount
               mountPath: /data
+            - mountPath: /var/log/
+              name: varlog
       {{- end }}
       dnsPolicy: ClusterFirst
       restartPolicy: Always

@@ -9,111 +9,114 @@ data:
   collector.py: |
     #!/usr/bin/env python3
     """
-    Metrics collector for srsRAN gNB JSON metrics.
-
-    Listens for JSON metrics on UDP and writes:
-      - <out>/gnb_metrics.jsonl : raw line-per-message (lossless)
-      - <out>/gnb_metrics.csv   : best-effort flattened per-UE rows
+    Tail srsRAN gNB stdout (tabular metrics) and append flattened rows to CSV.
     """
-    import csv, json, os, socket, time
+    import csv, os, re, time
     from pathlib import Path
 
-    PORT     = int(os.getenv("METRICS_PORT", "55555"))
+    IN_PATH  = Path(os.getenv("METRICS_IN",  "/var/log/gnb_stdout.log"))
     OUT_DIR  = Path(os.getenv("METRICS_OUT", "/data"))
-    JSONL    = OUT_DIR / "gnb_metrics.jsonl"
     CSV_PATH = OUT_DIR / "gnb_metrics.csv"
+    RAW_PATH = OUT_DIR / "gnb_metrics_raw.log"
 
-    CSV_FIELDS = [
+    FIELDS = [
         "timestamp", "pci", "rnti",
-        "dl_brate_kbps", "ul_brate_kbps",
-        "dl_mcs", "ul_mcs",
-        "dl_bler", "ul_bler",
-        "pusch_snr_db",
-        "n_ues",
+        "dl_cqi", "dl_ri", "dl_mcs", "dl_brate_kbps", "dl_ok", "dl_nok", "dl_bler_pct",
+        "ul_pusch_snr_db", "ul_pucch_snr_db", "ul_ri", "ul_mcs",
+        "ul_brate_kbps", "ul_ok", "ul_nok", "ul_bler_pct", "ul_bsr", "ul_ta_us",
     ]
 
-    def find_ue_list(obj):
-        if isinstance(obj, dict):
-            for k, v in obj.items():
-                if k in ("ue_list", "ues") and isinstance(v, list):
-                    return v
-                r = find_ue_list(v)
-                if r is not None:
-                    return r
-        elif isinstance(obj, list):
-            for item in obj:
-                r = find_ue_list(item)
-                if r is not None:
-                    return r
-        return None
+    def parse_rate(s):
+        if s in ("", "n/a", "-"):
+            return None
+        m = re.match(r"^([\d.]+)([kMG]?)$", s)
+        if not m:
+            try: return float(s)
+            except: return None
+        v = float(m.group(1))
+        mult = {"":1e-3, "k":1, "M":1e3, "G":1e6}.get(m.group(2), 1)
+        return v * mult
 
-    def get(d, *keys):
-        for k in keys:
-            cur = d
-            for part in k.split("."):
-                if not isinstance(cur, dict):
-                    cur = None
-                    break
-                cur = cur.get(part)
-            if cur is not None:
-                return cur
-        return None
+    def parse_num(s):
+        if s in ("", "n/a", "-"):
+            return None
+        s = s.rstrip("%")
+        try: return float(s) if "." in s else int(s)
+        except: return None
 
-    def flatten(msg):
-        ts = msg.get("timestamp") or time.time()
-        ues = find_ue_list(msg) or []
-        n = len(ues)
-        if not ues:
-            yield {"timestamp": ts, "n_ues": 0}
-            return
-        for ue in ues:
-            yield {
-                "timestamp":     ts,
-                "pci":           get(ue, "pci"),
-                "rnti":          get(ue, "rnti"),
-                "dl_brate_kbps": get(ue, "dl_brate_kbps", "dl.brate_kbps"),
-                "ul_brate_kbps": get(ue, "ul_brate_kbps", "ul.brate_kbps"),
-                "dl_mcs":        get(ue, "dl_mcs",        "dl.mcs"),
-                "ul_mcs":        get(ue, "ul_mcs",        "ul.mcs"),
-                "dl_bler":       get(ue, "dl_bler",       "dl.bler"),
-                "ul_bler":       get(ue, "ul_bler",       "ul.bler"),
-                "pusch_snr_db":  get(ue, "pusch_snr_db",  "ul.pusch_snr_db"),
-                "n_ues":         n,
+    def parse_line(line):
+        line = line.rstrip("\n")
+        if "|" not in line:
+            return None
+        if re.search(r"[a-zA-Z]{2,}", line.split("|")[0]):
+            return None
+        parts = re.split(r"\s*\|\s*", line.strip())
+        if len(parts) < 2:
+            return None
+        left  = parts[0].split()
+        mid   = parts[1].split() if len(parts) > 1 else []
+        right = parts[2].split() if len(parts) > 2 else []
+        if len(left) < 2:
+            return None
+        try:
+            pci, rnti = left[0], left[1]
+            row = {
+                "timestamp": time.time(),
+                "pci": parse_num(pci),
+                "rnti": rnti,
+                "dl_cqi":        parse_num(mid[0]) if len(mid) > 0 else None,
+                "dl_ri":         parse_num(mid[1]) if len(mid) > 1 else None,
+                "dl_mcs":        parse_num(mid[2]) if len(mid) > 2 else None,
+                "dl_brate_kbps": parse_rate(mid[3]) if len(mid) > 3 else None,
+                "dl_ok":         parse_num(mid[4]) if len(mid) > 4 else None,
+                "dl_nok":        parse_num(mid[5]) if len(mid) > 5 else None,
+                "dl_bler_pct":   parse_num(mid[6]) if len(mid) > 6 else None,
+                "ul_pusch_snr_db": parse_num(right[0]) if len(right) > 0 else None,
+                "ul_pucch_snr_db": parse_num(right[1]) if len(right) > 1 else None,
+                "ul_ri":           parse_num(right[2]) if len(right) > 2 else None,
+                "ul_mcs":          parse_num(right[3]) if len(right) > 3 else None,
+                "ul_brate_kbps":   parse_rate(right[4]) if len(right) > 4 else None,
+                "ul_ok":           parse_num(right[5]) if len(right) > 5 else None,
+                "ul_nok":          parse_num(right[6]) if len(right) > 6 else None,
+                "ul_bler_pct":     parse_num(right[7]) if len(right) > 7 else None,
+                "ul_bsr":          parse_num(right[8]) if len(right) > 8 else None,
+                "ul_ta_us":        parse_num(right[9]) if len(right) > 9 else None,
             }
+        except Exception:
+            return None
+        if row["pci"] is None or not re.match(r"^[0-9a-fA-F]+$", str(row["rnti"])):
+            return None
+        return row
 
     def main():
         OUT_DIR.mkdir(parents=True, exist_ok=True)
-        jsonl_f = open(JSONL, "a")
-        new_csv = not CSV_PATH.exists()
+        new_csv = not CSV_PATH.exists() or CSV_PATH.stat().st_size == 0
         csv_f = open(CSV_PATH, "a", newline="")
-        writer = csv.DictWriter(csv_f, fieldnames=CSV_FIELDS)
+        writer = csv.DictWriter(csv_f, fieldnames=FIELDS)
         if new_csv:
-            writer.writeheader()
-            csv_f.flush()
+            writer.writeheader(); csv_f.flush()
+        raw_f = open(RAW_PATH, "a")
 
-        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        sock.bind(("0.0.0.0", PORT))
-        print(f"metrics-collector: listening UDP :{PORT} -> {OUT_DIR}", flush=True)
+        while not IN_PATH.exists():
+            print(f"metrics-collector: waiting for {IN_PATH}", flush=True)
+            time.sleep(2)
 
+        print(f"metrics-collector: tailing {IN_PATH} -> {CSV_PATH}", flush=True)
         n = 0
-        while True:
-            data, _ = sock.recvfrom(65535)
-            line = data.decode(errors="replace").strip()
-            if not line:
-                continue
-            jsonl_f.write(line + "\n")
-            jsonl_f.flush()
-            try:
-                msg = json.loads(line)
-            except Exception as e:
-                print(f"parse error: {e}", flush=True)
-                continue
-            for row in flatten(msg):
-                writer.writerow(row)
-            csv_f.flush()
-            n += 1
-            if n % 60 == 0:
-                print(f"metrics-collector: {n} messages persisted", flush=True)
+        with open(IN_PATH, "r") as f:
+            f.seek(0, 2)
+            while True:
+                line = f.readline()
+                if not line:
+                    time.sleep(0.5); continue
+                raw_f.write(line); raw_f.flush()
+                row = parse_line(line)
+                if row is None:
+                    continue
+                writer.writerow(row); csv_f.flush()
+                n += 1
+                if n % 30 == 0:
+                    print(f"metrics-collector: {n} rows persisted", flush=True)
 
     if __name__ == "__main__":
         main()
