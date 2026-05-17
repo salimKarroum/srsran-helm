@@ -23,7 +23,7 @@ spec:
           command: ["/bin/bash", "-c"]
           args:
           {{- if .Values.start.gnb }}
-            - /usr/local/bin/gnb -c /srsran/config/srsran-gnb.yaml 2>&1 | tee /var/log/gnb_stdout.log
+            - stdbuf -oL /usr/local/bin/gnb -c /srsran/config/srsran-gnb.yaml 2>&1 | stdbuf -oL tee /var/log/gnb_stdout.log
           {{- else }}
             - sleep infinity
           {{- end }}
